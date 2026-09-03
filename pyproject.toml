@@ -1,0 +1,19 @@
+[project]
+name = "psa-tool"
+version = "0.1.0"
+description = "CLI zum Erfassen und Synchronisieren von Zeiteintraegen in Dynamics 365 Project Operations (Dataverse)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.5.0",
+    "msal>=1.38.0",
+    "questionary>=2.1.1",
+    "requests>=2.34.2",
+]
+
+[project.scripts]
+psa = "psa_tool.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.6,<0.13.0"]
+build-backend = "uv_build"
