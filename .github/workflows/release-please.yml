@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    types:
+      - closed
 
 permissions:
   contents: write
@@ -12,10 +15,73 @@ permissions:
 jobs:
   release-please:
     name: Create release PR
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - name: Create or update release pull request
+        id: release
         uses: googleapis/release-please-action@v4
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  cleanup-closed-release-branch:
+    name: Delete declined release branch
+    if: >-
+      github.event_name == 'pull_request' &&
+      !github.event.pull_request.merged &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'release-please--')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete release branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${RELEASE_BRANCH}"
+
+  publish-binaries:
+    name: Publish release binaries
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+          - os: macos-13
+            target: x86_64-apple-darwin
+            archive: tar.gz
+          - os: macos-14
+            target: aarch64-apple-darwin
+            archive: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - name: Build binary
+        run: cargo build --locked --release --bin psa
+      - name: Create Unix archive
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          tar -C target/release -czf "psa-tool-${{ needs.release-please.outputs.tag_name }}-${{ matrix.target }}.tar.gz" psa
+      - name: Create Windows archive
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: Compress-Archive -Path target/release/psa.exe -DestinationPath "psa-tool-${{ needs.release-please.outputs.tag_name }}-${{ matrix.target }}.zip"
+      - name: Upload release archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release upload "${{ needs.release-please.outputs.tag_name }}" \
+            "psa-tool-${{ needs.release-please.outputs.tag_name }}-${{ matrix.target }}.${{ matrix.archive }}"

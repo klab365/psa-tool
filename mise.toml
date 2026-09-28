@@ -1,5 +1,5 @@
 [tools]
-rust = "1.87.0"
+rust = { version = "1.98.1", components = "rustfmt,clippy" }
 
 [tasks.install]
 description = "Installiert die psa-Binary mit dem von mise verwalteten Rust-Toolchain"
