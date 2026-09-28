@@ -323,11 +323,12 @@ wheels = [
 
 [[package]]
 name = "psa-tool"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
     { name = "msal" },
+    { name = "prompt-toolkit" },
     { name = "questionary" },
     { name = "requests" },
 ]
@@ -336,6 +337,7 @@ dependencies = [
 requires-dist = [
     { name = "click", specifier = ">=8.5.0" },
     { name = "msal", specifier = ">=1.38.0" },
+    { name = "prompt-toolkit", specifier = ">=3.0,<4.0" },
     { name = "questionary", specifier = ">=2.1.1" },
     { name = "requests", specifier = ">=2.34.2" },
 ]
