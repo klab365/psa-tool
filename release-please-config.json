@@ -1,11 +1,11 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-  "release-type": "python",
+  "release-type": "rust",
   "packages": {
     ".": {
       "package-name": "psa-tool",
       "extra-files": [
-        "uv.lock"
+        "Cargo.lock"
       ]
     }
   }
