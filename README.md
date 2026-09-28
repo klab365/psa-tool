@@ -7,20 +7,19 @@ Dynamics 365 Project Operations (Dataverse).
 
 ### Direkt mit mise
 
-Nach der Veröffentlichung auf crates.io wird die Binary ohne Klonen des
-Repositories direkt über das Cargo-Backend von mise installiert und global
-aktiviert:
+Nach einem GitHub Release wird die Binary ohne Klonen des Repositories und ohne
+Cargo global über mise installiert:
 
 ```bash
-mise use -g cargo:psa-tool@latest
+mise use -g github:klab365/psa-tool@latest
 psa --help
 ```
 
 Falls der Eintrag bereits in der globalen mise-Konfiguration steht, installiert
-folgender Befehl die konfigurierte Version (ohne sie zu aktivieren):
+folgender Befehl die konfigurierte Version:
 
 ```bash
-mise install cargo:psa-tool@latest
+mise install github:klab365/psa-tool@latest
 ```
 
 ### Entwicklung
