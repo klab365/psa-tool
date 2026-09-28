@@ -3,8 +3,7 @@
 ## Rust-Projekt
 
 - Produktiver Rust-Code liegt in `src/`; CLI-Integrationstests liegen in
-  `tests/`. Die Python-Implementierung unter `_archive/python/` ist nur ein
-  Archiv und wird nicht erweitert.
+  `tests/`.
 - Jede direkt importierte Drittanbieterbibliothek gehört als direkte
   Abhängigkeit in `Cargo.toml`. Testbibliotheken gehören nach
   `[dev-dependencies]`.
