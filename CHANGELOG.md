@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/klab365/psa-tool/compare/psa-tool-v1.2.0...psa-tool-v1.2.1) (2026-09-28)
+
+
+### Bug Fixes
+
+* stop publishing Intel macOS binaries ([#13](https://github.com/klab365/psa-tool/issues/13)) ([2a85d66](https://github.com/klab365/psa-tool/commit/2a85d66efed4807d074d6680767169dc91df36c0))
+
 ## [1.2.0](https://github.com/klab365/psa-tool/compare/psa-tool-v1.1.0...psa-tool-v1.2.0) (2026-09-28)
 
 
