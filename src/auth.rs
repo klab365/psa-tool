@@ -74,32 +74,31 @@ pub async fn access_token(
     let http = reqwest::Client::new();
     let a = authority(config);
     let scope = scope(config)?;
-    if !force {
-        if let Ok(raw) = fs::read(&paths.token_cache_file) {
-            if let Ok(c) = serde_json::from_slice::<Cache>(&raw) {
-                let v = token_request(
-                    &http,
-                    format!("{a}/oauth2/v2.0/token"),
-                    &[
-                        ("client_id", client(config)),
-                        ("grant_type", "refresh_token"),
-                        ("refresh_token", &c.refresh_token),
-                        ("scope", &scope),
-                    ],
-                )
-                .await?;
-                save(
-                    paths,
-                    v.get("refresh_token")
-                        .and_then(Value::as_str)
-                        .unwrap_or(&c.refresh_token),
-                )?;
-                return v["access_token"]
-                    .as_str()
-                    .map(str::to_owned)
-                    .ok_or_else(|| AuthError::OAuth("kein access_token erhalten".into()));
-            }
-        }
+    if !force
+        && let Ok(raw) = fs::read(&paths.token_cache_file)
+        && let Ok(c) = serde_json::from_slice::<Cache>(&raw)
+    {
+        let v = token_request(
+            &http,
+            format!("{a}/oauth2/v2.0/token"),
+            &[
+                ("client_id", client(config)),
+                ("grant_type", "refresh_token"),
+                ("refresh_token", &c.refresh_token),
+                ("scope", &scope),
+            ],
+        )
+        .await?;
+        save(
+            paths,
+            v.get("refresh_token")
+                .and_then(Value::as_str)
+                .unwrap_or(&c.refresh_token),
+        )?;
+        return v["access_token"]
+            .as_str()
+            .map(str::to_owned)
+            .ok_or_else(|| AuthError::OAuth("kein access_token erhalten".into()));
     }
     let device = token_request(
         &http,

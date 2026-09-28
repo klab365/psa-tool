@@ -13,9 +13,56 @@ jobs:
   release-please:
     name: Create release PR
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - name: Create or update release pull request
+        id: release
         uses: googleapis/release-please-action@v4
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  publish-binaries:
+    name: Publish release binaries
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+          - os: macos-13
+            target: x86_64-apple-darwin
+            archive: tar.gz
+          - os: macos-14
+            target: aarch64-apple-darwin
+            archive: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - name: Build binary
+        run: cargo build --locked --release --bin psa
+      - name: Create Unix archive
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          tar -C target/release -czf "psa-tool-${{ needs.release-please.outputs.tag_name }}-${{ matrix.target }}.tar.gz" psa
+      - name: Create Windows archive
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: Compress-Archive -Path target/release/psa.exe -DestinationPath "psa-tool-${{ needs.release-please.outputs.tag_name }}-${{ matrix.target }}.zip"
+      - name: Upload release archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release upload "${{ needs.release-please.outputs.tag_name }}" \
+            "psa-tool-${{ needs.release-please.outputs.tag_name }}-${{ matrix.target }}.${{ matrix.archive }}"
