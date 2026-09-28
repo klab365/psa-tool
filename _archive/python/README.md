@@ -148,20 +148,41 @@ source .venv/bin/activate
 Danach steht der Befehl `psa` im aktivierten venv zur Verfügung
 (`uv run psa ...` funktioniert auch ohne vorheriges Aktivieren).
 
-### Option B: Global via mise + pipx direkt aus dem Git-Repo (fuer reine Nutzung)
+### Option B: Globale Rust-CLI mit mise (fuer reine Nutzung)
 
-Ohne Klonen, direkt installiert und global im PATH verfügbar
-([mise](https://mise.jdx.dev/) mit dem `pipx`-Backend):
+Die Python-Implementierung in diesem Verzeichnis ist archiviert. Für die
+aktuelle Rust-CLI wird nach einem GitHub Release keine lokale Kopie, kein venv
+und kein Cargo benötigt:
 
 ```bash
-mise use -g pipx:git+https://github.com/klab365/psa-tool.git
+mise use -g github:klab365/psa-tool@latest
+psa --help
 ```
 
-Danach steht `psa` global zur Verfügung (kein Aktivieren eines venv nötig).
-Update auf eine neuere Version des Tools:
+Danach muss die eigene Dataverse-Organisation konfiguriert und der Device-Code-
+Login durchgeführt werden:
 
 ```bash
-mise install -f pipx:git+https://github.com/klab365/psa-tool.git
+psa config set environmentUrl https://<eureorg>.crm4.dynamics.com
+psa login
+psa config set mapping.timezone Europe/Zurich # oder eure IANA-Zeitzone
+psa config show
+```
+
+Anschließend können vorhandene Einträge abgerufen und neue erfasst werden:
+
+```bash
+psa pull
+psa add
+psa week
+psa sync --dry-run
+```
+
+Um eine bereits global konfigurierte Version zu installieren oder zu
+aktualisieren:
+
+```bash
+mise install github:klab365/psa-tool@latest
 ```
 
 ## Konfiguration
