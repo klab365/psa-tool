@@ -20,6 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v2
+      - run: rustup component add rustfmt --toolchain 1.87.0
       - run: cargo fmt --check
 
   lint:
@@ -28,6 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v2
+      - run: rustup component add clippy --toolchain 1.87.0
       - run: cargo clippy --locked --all-targets -- -D warnings
 
   test:
