@@ -36,6 +36,7 @@ Danach können Einträge abgerufen und erfasst werden:
 ```bash
 psa pull
 psa add
+psa history # letzten Eintrag als Vorlage wählen
 psa week
 psa sync --dry-run
 ```

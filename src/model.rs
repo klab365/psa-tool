@@ -16,6 +16,20 @@ pub struct TimeEntry {
     pub error: Option<String>,
 }
 
+impl std::fmt::Display for TimeEntry {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "#{} {} | {}h | {} | {}",
+            self.id,
+            self.work_date,
+            self.hours,
+            self.project_name.as_deref().unwrap_or("Ohne Projekt"),
+            self.description.as_deref().unwrap_or_default()
+        )
+    }
+}
+
 impl TimeEntry {
     pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
         Ok(Self {
