@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/klab365/psa-tool/compare/psa-tool-v1.0.0...psa-tool-v1.1.0) (2026-09-28)
+
+
+### Features
+
+* dispatch local commands through mediator ([#9](https://github.com/klab365/psa-tool/issues/9)) ([f87eef7](https://github.com/klab365/psa-tool/commit/f87eef75bd4b66c8940e9b2dc6bbc9c962c4657c))
+
 ## [1.0.0](https://github.com/klab365/psa-tool/compare/psa-tool-v0.2.0...psa-tool-v1.0.0) (2026-09-28)
 
 
