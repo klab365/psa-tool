@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/klab365/psa-tool/compare/psa-tool-v1.1.0...psa-tool-v1.2.0) (2026-09-28)
+
+
+### Features
+
+* add interactive time entry capture ([#11](https://github.com/klab365/psa-tool/issues/11)) ([a045e95](https://github.com/klab365/psa-tool/commit/a045e95cc6b1cd24dcc85012ee8df5bb6b0af84f))
+
 ## [1.1.0](https://github.com/klab365/psa-tool/compare/psa-tool-v1.0.0...psa-tool-v1.1.0) (2026-09-28)
 
 
