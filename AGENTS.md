@@ -7,10 +7,14 @@
   stabile API-Garantie.
 - Nach Änderungen an Abhängigkeiten `uv lock` ausführen und `uv.lock` committen.
 - Die Paketversion ist die einzige Quelle in `pyproject.toml`.
-- Versionierung folgt Semantic Versioning:
-  - Bugfix ohne API-/Verhaltensbruch: Patch erhöhen (`uv version --bump patch`).
-  - Rückwärtskompatibles Feature: Minor erhöhen (`uv version --bump minor`).
-  - Inkompatible Änderung: Major erhöhen (`uv version --bump major`).
+- Versionen werden ausschließlich über Release Please erhöht. In Feature- und
+  Bugfix-PRs weder `project.version` noch `.release-please-manifest.json`
+  manuell ändern.
+- Commit- und Squash-Merge-Titel folgen Conventional Commits, damit Release
+  Please die korrekte SemVer-Version ermittelt:
+  - `fix:` erhöht Patch.
+  - `feat:` erhöht Minor.
+  - `feat!:` oder ein `BREAKING CHANGE:`-Footer erhöht Major.
 
 ## Vor dem Commit
 
