@@ -4,6 +4,7 @@
 //! existing application's files in `~/.psa-tool`.
 
 pub mod auth;
+pub mod commands;
 pub mod config;
 pub mod dataverse;
 pub mod db;
