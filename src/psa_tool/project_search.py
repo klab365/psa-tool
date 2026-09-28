@@ -14,8 +14,9 @@ def _escape(value: str) -> str:
 def get_my_project_ids(config: dict) -> list[str] | None:
     """Liefert die Projekt-IDs, in denen die konfigurierte resourceId Teammitglied ist.
 
-    Gibt None zurueck, wenn die Abfrage fehlschlaegt (z.B. falsches Mapping) -
-    dann wird vom Aufrufer NICHT gefiltert (Fallback: alle Projekte)."""
+    Gibt None zurueck, wenn die Abfrage fehlschlaegt (z.B. falsches Mapping).
+    Der Aufrufer zeigt in diesem Fall keine Projekte, damit nie fremde Projekte
+    angeboten werden."""
     global _warned_fallback
     resource_id = config.get("resourceId")
     if not resource_id:
@@ -38,7 +39,7 @@ def get_my_project_ids(config: dict) -> list[str] | None:
         if not _warned_fallback:
             print(
                 "Hinweis: Konnte Projekt-Team-Mitgliedschaft nicht ermitteln "
-                f"(Entitaet '{entity_set}') - zeige stattdessen alle Projekte. "
+                f"(Entitaet '{entity_set}') - zeige deshalb keine Projekte. "
                 "Mit 'psa discover myprojects' pruefen/anpassen."
             )
             _warned_fallback = True
@@ -50,9 +51,10 @@ def search_projects(query: str, top: int = 50) -> tuple[list[dict], bool]:
     """Sucht Projekte. Gibt (Treffer, has_more) zurueck, wobei has_more anzeigt,
     dass es mehr Treffer gibt, als angezeigt werden (Suche weiter eingrenzen).
 
-    Wenn mapping.restrictToMyProjects aktiv ist und die eigene resourceId gesetzt
-    ist, wird zusaetzlich auf Projekte eingeschraenkt, in denen man Teammitglied
-    ist (siehe get_my_project_ids)."""
+    Wenn mapping.restrictToMyProjects aktiv ist, werden ausschließlich Projekte
+    angezeigt, in denen die konfigurierte resourceId Teammitglied ist. Kann die
+    Mitgliedschaft nicht ermittelt werden, werden sicherheitshalber keine
+    Projekte angezeigt (siehe get_my_project_ids)."""
     config = load_config()
     mapping = config["mapping"]
     q = _escape(query)
@@ -63,11 +65,10 @@ def search_projects(query: str, top: int = 50) -> tuple[list[dict], bool]:
 
     if mapping.get("restrictToMyProjects"):
         my_ids = get_my_project_ids(config)
-        if my_ids is not None:
-            if not my_ids:
-                return [], False
-            id_filter = " or ".join(f"{mapping['projectIdField']} eq {pid}" for pid in my_ids)
-            filters.append(f"({id_filter})")
+        if my_ids is None or not my_ids:
+            return [], False
+        id_filter = " or ".join(f"{mapping['projectIdField']} eq {pid}" for pid in my_ids)
+        filters.append(f"({id_filter})")
 
     filter_part = f"$filter={' and '.join(filters)}&" if filters else ""
     path = (

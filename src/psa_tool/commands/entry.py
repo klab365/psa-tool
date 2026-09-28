@@ -1,7 +1,59 @@
 import questionary
+from prompt_toolkit.application.current import get_app
+from prompt_toolkit.filters import Condition
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.shortcuts import CompleteStyle
+from prompt_toolkit.styles import Style
 
 from ..db import get_entry, insert_entry, update_entry
 from ..project_search import search_projects, search_tasks
+
+
+# Der Completion-Dialog soll sich auch in hellen bzw. kontrastarmen Terminal-
+# Themes klar vom Hintergrund abheben. Die aktuelle Auswahl ist blau hinterlegt
+# und fett, alle anderen Vorschläge liegen auf einem dunklen Panel.
+_AUTOCOMPLETE_STYLE = Style.from_dict(
+    {
+        "qmark": "bold #38bdf8",
+        "question": "bold #ffffff",
+        "answer": "#ffffff",
+        "completion-menu": "bg:#1f2937 #e5e7eb",
+        "completion-menu.completion": "bg:#1f2937 #e5e7eb",
+        "completion-menu.completion.current": "bg:#2563eb #ffffff bold",
+        "completion-menu.meta.completion": "bg:#1f2937 #9ca3af",
+        "completion-menu.meta.completion.current": "bg:#2563eb #ffffff",
+        "scrollbar.background": "bg:#111827",
+        "scrollbar.button": "bg:#60a5fa",
+    }
+)
+
+
+# Bei leerem Feld öffnen j/k und die Pfeiltasten direkt die Vorschlagsliste.
+# Sobald ein Suchtext existiert, bleiben j und k normale Zeichen.
+_EMPTY_SEARCH_KEY_BINDINGS = KeyBindings()
+_EMPTY_SEARCH_INPUT = Condition(lambda: not get_app().current_buffer.text)
+
+
+def _move_completion(event, backwards: bool = False) -> None:
+    buffer = event.current_buffer
+    if buffer.complete_state is None:
+        buffer.start_completion(select_first=True)
+    if backwards:
+        buffer.complete_previous()
+    else:
+        buffer.complete_next()
+
+
+@_EMPTY_SEARCH_KEY_BINDINGS.add("j", filter=_EMPTY_SEARCH_INPUT)
+@_EMPTY_SEARCH_KEY_BINDINGS.add("down", filter=_EMPTY_SEARCH_INPUT)
+def _next_completion(event) -> None:
+    _move_completion(event)
+
+
+@_EMPTY_SEARCH_KEY_BINDINGS.add("k", filter=_EMPTY_SEARCH_INPUT)
+@_EMPTY_SEARCH_KEY_BINDINGS.add("up", filter=_EMPTY_SEARCH_INPUT)
+def _previous_completion(event) -> None:
+    _move_completion(event, backwards=True)
 
 
 def _resolve_project(typed: str, pool: list[dict]):
@@ -11,7 +63,6 @@ def _resolve_project(typed: str, pool: list[dict]):
     if len(matches) > 1:
         choices = [questionary.Choice(title=f"{p['name']}  ({p['id']})", value=p) for p in matches]
         return questionary.select("Mehrere Treffer mit gleichem Namen - bitte wählen:", choices=choices).ask()
-    # Getippter Text war nicht (mehr) exakt im lokalen Pool -> live nachsuchen
     results, _ = search_projects(typed)
     if not results:
         print(f"Kein Projekt gefunden für '{typed}'.")
@@ -40,7 +91,7 @@ def _resolve_task(typed: str, pool: list[dict], project):
 
 
 def _pick_project():
-    """Echtes Suchfeld: tippen, Vorschläge erscheinen automatisch, Enter wählt aus."""
+    """Suchfeld mit deutlich formatiertem Dropdown."""
     pool, has_more = search_projects("", top=200)
     if has_more:
         print(
@@ -51,10 +102,13 @@ def _pick_project():
     if not pool:
         print("Keine Projekte gefunden.")
         return None
-    names = [p["name"] for p in pool]
     typed = questionary.autocomplete(
         "Projekt (tippen zum Suchen, Enter zum Übernehmen; leer = kein Projekt):",
-        choices=names,
+        choices=[p["name"] for p in pool],
+        style=_AUTOCOMPLETE_STYLE,
+        complete_style=CompleteStyle.MULTI_COLUMN,
+        complete_while_typing=True,
+        key_bindings=_EMPTY_SEARCH_KEY_BINDINGS,
     ).ask()
     if not typed:
         return None
@@ -73,6 +127,10 @@ def _pick_task(project):
     typed = questionary.autocomplete(
         "Task (tippen zum Suchen, Enter zum Übernehmen; leer/'(kein Task)' = keiner):",
         choices=names,
+        style=_AUTOCOMPLETE_STYLE,
+        complete_style=CompleteStyle.MULTI_COLUMN,
+        complete_while_typing=True,
+        key_bindings=_EMPTY_SEARCH_KEY_BINDINGS,
     ).ask()
     if not typed or typed == "(kein Task)":
         return None
