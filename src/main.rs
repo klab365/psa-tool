@@ -1,7 +1,19 @@
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, Utc};
 use chrono_tz::Tz;
 use clap::{Parser, Subcommand};
-use psa_tool::{auth, config, dataverse::Client, db, model::TimeEntry, paths::AppPaths};
+use psa_tool::{
+    commands::{
+        AppContext, AppMediator,
+        auth::{Login, Logout},
+        config::{GetConfig, SetConfig, ShowConfig},
+        time_entries::{CreateTimeEntry, ListTimeEntries, RemoveTimeEntry},
+    },
+    config,
+    dataverse::Client,
+    db,
+    model::TimeEntry,
+    paths::AppPaths,
+};
 use serde_json::{Value, json};
 #[derive(Parser)]
 #[command(
@@ -94,9 +106,6 @@ fn week(date: Option<&str>) -> Result<(String, String), String> {
     };
     let start = d - Duration::days((d.weekday().num_days_from_monday()) as i64);
     Ok((start.to_string(), (start + Duration::days(6)).to_string()))
-}
-fn get_value<'a>(c: &'a Value, key: &str) -> Option<&'a Value> {
-    key.split('.').try_fold(c, |v, k| v.get(k))
 }
 fn config_bool(value: &Value) -> bool {
     value.as_bool().unwrap_or_else(|| {
@@ -389,42 +398,29 @@ async fn main() {
 }
 async fn run(cli: Cli) -> Result<(), String> {
     let p = AppPaths::discover().map_err(|e| e.to_string())?;
-    let mut c = config::load(&p).map_err(|e| e.to_string())?;
+    let c = config::load(&p).map_err(|e| e.to_string())?;
+    let mediator = AppMediator::new(AppContext::new(p.clone(), c.clone()));
     match cli.command {
         Command::Config {
             command: Config::Show,
-        } => println!("{}", serde_json::to_string_pretty(&c).unwrap()),
+        } => println!("{}", mediator.send(ShowConfig).await?),
         Command::Config {
             command: Config::Get { key },
-        } => println!(
-            "{}",
-            get_value(&c, &key)
-                .map(Value::to_string)
-                .unwrap_or("null".into())
-                .trim_matches('"')
-        ),
+        } => println!("{}", mediator.send(GetConfig { key }).await?),
         Command::Config {
-            command: Config::Set { key, value: v },
-        } => {
-            config::set_value(&mut c, &key, v.clone()).map_err(|e| e.to_string())?;
-            config::save(&p, &c).map_err(|e| e.to_string())?;
-            println!("{key} = {v}")
-        }
-        Command::Logout => {
-            auth::logout(&p).map_err(|e| e.to_string())?;
-            println!("Abgemeldet.")
-        }
-        Command::Login => {
-            let dv = Client::new(&p, &c, true).await.map_err(|e| e.to_string())?;
-            let who = dv.get("/WhoAmI", false).await.map_err(|e| e.to_string())?;
-            println!(
-                "Angemeldet. BusinessUnitId={} UserId={}",
-                who["BusinessUnitId"], who["UserId"]
-            )
-        }
+            command: Config::Set { key, value },
+        } => println!("{}", mediator.send(SetConfig { key, value }).await?),
+        Command::Logout => println!("{}", mediator.send(Logout).await?),
+        Command::Login => println!("{}", mediator.send(Login).await?),
         Command::List => {
-            let d = db::open(&p).map_err(|e| e.to_string())?;
-            for e in db::list(&d, None, None, true).map_err(|e| e.to_string())? {
+            let entries = mediator
+                .send(ListTimeEntries {
+                    from: None,
+                    to: None,
+                    include_deleted: true,
+                })
+                .await?;
+            for e in entries {
                 println!(
                     "#{} {} {}h {} {} [{}]",
                     e.id,
@@ -438,8 +434,13 @@ async fn run(cli: Cli) -> Result<(), String> {
         }
         Command::Week { date } => {
             let (a, b) = week(date.as_deref())?;
-            let d = db::open(&p).map_err(|e| e.to_string())?;
-            let es = db::list(&d, Some(&a), Some(&b), false).map_err(|e| e.to_string())?;
+            let es = mediator
+                .send(ListTimeEntries {
+                    from: Some(a.clone()),
+                    to: Some(b.clone()),
+                    include_deleted: false,
+                })
+                .await?;
             println!("Woche {a} – {b}");
             let total: f64 = es.iter().map(|e| e.hours).sum();
             for e in es {
@@ -455,8 +456,7 @@ async fn run(cli: Cli) -> Result<(), String> {
             println!("  Summe: {total}h")
         }
         Command::Remove { id } => {
-            let d = db::open(&p).map_err(|e| e.to_string())?;
-            db::mark_deleted(&d, id).map_err(|_| format!("Eintrag {id} nicht gefunden"))?;
+            mediator.send(RemoveTimeEntry { id }).await?;
             println!("Eintrag #{id} zum Löschen vorgemerkt.")
         }
         Command::Add {
@@ -473,7 +473,6 @@ async fn run(cli: Cli) -> Result<(), String> {
                     "Rust add ist nicht-interaktiv: --hours und --description angeben.".into(),
                 );
             };
-            let d = db::open(&p).map_err(|e| e.to_string())?;
             let e = TimeEntry {
                 id: 0,
                 work_date: date.unwrap_or_else(|| Local::now().date_naive().to_string()),
@@ -488,7 +487,7 @@ async fn run(cli: Cli) -> Result<(), String> {
                 entry_status: None,
                 error: None,
             };
-            let id = db::insert(&d, &e, None, "new").map_err(|e| e.to_string())?;
+            let id = mediator.send(CreateTimeEntry { entry: e }).await?;
             println!("Eintrag #{id} erfasst.")
         }
         Command::Edit { id } => {

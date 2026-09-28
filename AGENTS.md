@@ -15,6 +15,23 @@
   `clippy`. Die CI installiert sie explizit für den in `mise.toml` definierten
   Rust-Toolchain.
 
+## Architektur: CQRS mit `medi-rs`
+
+- Neue Anwendungsfälle als Commands oder Queries in einem thematischen Modul
+  unter `src/commands/` implementieren. Das Modul enthält Nachrichtentyp,
+  Handler und sein `medi_module!`-Manifest.
+- `src/commands/mod.rs` komponiert die Manifeste zum gemeinsamen
+  `AppMediator`. Gemeinsame, clonebare Abhängigkeiten gehören in
+  `AppContext` und werden als Mediator-Resource injiziert.
+- Handler enthalten die Anwendungslogik und rufen technische Module wie
+  `db`, `auth` und `dataverse` auf. `src/main.rs` bleibt auf Clap-Parsing,
+  die Abbildung auf Commands/Queries und die Darstellung der Ergebnisse
+  beschränkt.
+- Für externe oder persistente Abhängigkeiten bevorzugt Traits mit
+  `Arc<dyn ... + Send + Sync>` als Resource verwenden, damit Handler mit
+  Fakes getestet werden können. Das Command-Routing von `medi-rs` bleibt
+  dabei statisch.
+
 ## Vor dem Commit
 
 Bei jeder Änderung muss die vollständige Prüfung erfolgreich sein:
