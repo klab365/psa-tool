@@ -1,15 +1,16 @@
 [tools]
-python = "3.12"
-uv = "latest"
+rust = "1.87.0"
 
-[env]
-_.python.venv = { path = ".venv", create = true }
+[tasks.install]
+description = "Installiert die psa-Binary mit dem von mise verwalteten Rust-Toolchain"
+run = "cargo install --path . --locked"
 
 [tasks.check]
-description = "Prueft Lockfile, Quellcode, Paketbau und Git-Diff"
+description = "Prüft Rust-Formatierung, Lints, Tests, Build und Git-Diff"
 run = """
-uv lock --locked
-uv run python -m compileall -q src
-uv build
+cargo fmt --check
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked
+cargo build --locked --release
 git diff --check
 """

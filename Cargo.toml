@@ -1,0 +1,29 @@
+[package]
+name = "psa-tool"
+version = "0.1.0"
+edition = "2024"
+description = "CLI zum Erfassen und Synchronisieren von Zeiteinträgen in Dynamics 365 Project Operations"
+license = "MIT"
+
+[[bin]]
+name = "psa"
+path = "src/main.rs"
+
+[lib]
+name = "psa_tool"
+path = "src/lib.rs"
+
+[dependencies]
+chrono = "0.4.41"
+chrono-tz = "0.10.4"
+clap = { version = "4.5.41", features = ["derive"] }
+directories = "6.0.0"
+reqwest = { version = "0.12.22", default-features = false, features = ["json", "rustls-tls"] }
+rusqlite = { version = "0.37.0", features = ["bundled"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+thiserror = "2.0.12"
+tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread", "time"] }
+
+[dev-dependencies]
+tempfile = "3.20.0"
