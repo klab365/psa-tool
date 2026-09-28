@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    types:
+      - closed
 
 permissions:
   contents: write
@@ -12,6 +15,7 @@ permissions:
 jobs:
   release-please:
     name: Create release PR
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
@@ -23,6 +27,21 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  cleanup-closed-release-branch:
+    name: Delete declined release branch
+    if: >-
+      github.event_name == 'pull_request' &&
+      !github.event.pull_request.merged &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'release-please--')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete release branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${RELEASE_BRANCH}"
 
   publish-binaries:
     name: Publish release binaries
