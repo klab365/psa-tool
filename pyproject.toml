@@ -1,6 +1,6 @@
 [project]
 name = "psa-tool"
-version = "0.1.0"
+version = "0.2.0"
 description = "CLI zum Erfassen und Synchronisieren von Zeiteintraegen in Dynamics 365 Project Operations (Dataverse)"
 readme = "README.md"
 requires-python = ">=3.12"
