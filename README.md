@@ -22,6 +22,24 @@ folgender Befehl die konfigurierte Version:
 mise install github:klab365/psa-tool@latest
 ```
 
+Danach die eigene Dataverse-Organisation konfigurieren und anmelden:
+
+```bash
+psa config set environmentUrl https://<eureorg>.crm4.dynamics.com
+psa login
+psa config set mapping.timezone Europe/Zurich # oder eure IANA-Zeitzone
+psa config show
+```
+
+Danach können Einträge abgerufen und erfasst werden:
+
+```bash
+psa pull
+psa add
+psa week
+psa sync --dry-run
+```
+
 ### Entwicklung
 
 ```bash
