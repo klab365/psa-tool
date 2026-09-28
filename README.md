@@ -3,7 +3,27 @@
 Rust-CLI zum Erfassen lokaler Zeiteinträge und zur Synchronisation mit Microsoft
 Dynamics 365 Project Operations (Dataverse).
 
-## Entwicklung
+## Installation
+
+### Direkt mit mise
+
+Nach der Veröffentlichung auf crates.io wird die Binary ohne Klonen des
+Repositories direkt über das Cargo-Backend von mise installiert und global
+aktiviert:
+
+```bash
+mise use -g cargo:psa-tool@latest
+psa --help
+```
+
+Falls der Eintrag bereits in der globalen mise-Konfiguration steht, installiert
+folgender Befehl die konfigurierte Version (ohne sie zu aktivieren):
+
+```bash
+mise install cargo:psa-tool@latest
+```
+
+### Entwicklung
 
 ```bash
 mise trust
@@ -42,9 +62,3 @@ mise run check
 ```
 
 Dies prüft Formatierung, Clippy, Tests, Release-Build und Whitespace im Diff.
-
-## Archiv
-
-Die abgelöste Python-Implementierung inklusive ihrer Abhängigkeiten liegt in
-[`_archive/python/`](_archive/python/). Der ursprüngliche Migrationsplan liegt
-in [`_archive/docs/work/rust-migration-plan.md`](_archive/docs/work/rust-migration-plan.md).

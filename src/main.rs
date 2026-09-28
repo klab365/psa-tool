@@ -298,7 +298,13 @@ async fn sync(
         println!("Nichts zu synchronisieren – alles aktuell.");
         return Ok(());
     }
-    let dv = client(paths, c).await?;
+    // A dry run must remain fully local: it must not require a token or make
+    // an HTTP request.
+    let dv = if dry {
+        None
+    } else {
+        Some(client(paths, c).await?)
+    };
     let m = &c["mapping"];
     for e in pending {
         let label = format!(
@@ -313,13 +319,15 @@ async fn sync(
                     println!("[dry-run] DELETE {label}");
                     Ok(())
                 } else {
-                    dv.delete(
-                        value(m, "/timeEntryEntitySet"),
-                        e.remote_id.as_deref().unwrap_or(""),
-                    )
-                    .await
-                    .map_err(|x| x.to_string())
-                    .and_then(|_| db::delete(conn, e.id).map_err(|x| x.to_string()))
+                    dv.as_ref()
+                        .expect("Dataverse client for non-dry sync")
+                        .delete(
+                            value(m, "/timeEntryEntitySet"),
+                            e.remote_id.as_deref().unwrap_or(""),
+                        )
+                        .await
+                        .map_err(|x| x.to_string())
+                        .and_then(|_| db::delete(conn, e.id).map_err(|x| x.to_string()))
                 }
             }
             "new" => {
@@ -328,6 +336,8 @@ async fn sync(
                     Ok(())
                 } else {
                     match dv
+                        .as_ref()
+                        .expect("Dataverse client for non-dry sync")
                         .post(value(m, "/timeEntryEntitySet"), &entry_body(&e, c))
                         .await
                     {
@@ -346,17 +356,19 @@ async fn sync(
                     println!("[dry-run] UPDATE {label}");
                     Ok(())
                 } else {
-                    dv.patch(
-                        value(m, "/timeEntryEntitySet"),
-                        e.remote_id.as_deref().unwrap_or(""),
-                        &entry_body(&e, c),
-                    )
-                    .await
-                    .map_err(|x| x.to_string())
-                    .and_then(|_| {
-                        db::synced(conn, e.id, e.remote_id.as_deref().unwrap_or(""))
-                            .map_err(|x| x.to_string())
-                    })
+                    dv.as_ref()
+                        .expect("Dataverse client for non-dry sync")
+                        .patch(
+                            value(m, "/timeEntryEntitySet"),
+                            e.remote_id.as_deref().unwrap_or(""),
+                            &entry_body(&e, c),
+                        )
+                        .await
+                        .map_err(|x| x.to_string())
+                        .and_then(|_| {
+                            db::synced(conn, e.id, e.remote_id.as_deref().unwrap_or(""))
+                                .map_err(|x| x.to_string())
+                        })
                 }
             }
         };

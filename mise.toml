@@ -1,6 +1,10 @@
 [tools]
 rust = "1.87.0"
 
+[tasks.install]
+description = "Installiert die psa-Binary mit dem von mise verwalteten Rust-Toolchain"
+run = "cargo install --path . --locked"
+
 [tasks.check]
 description = "Prüft Rust-Formatierung, Lints, Tests, Build und Git-Diff"
 run = """
