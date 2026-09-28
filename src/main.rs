@@ -10,7 +10,7 @@ use psa_tool::{
     },
     config,
     dataverse::Client,
-    db,
+    db, interactive,
     model::TimeEntry,
     paths::AppPaths,
 };
@@ -33,6 +33,9 @@ enum Command {
         command: Config,
     },
     Add {
+        /// Fehlende Werte abfragen sowie Projekt und Task suchen.
+        #[arg(long)]
+        interactive: bool,
         #[arg(long)]
         date: Option<String>,
         #[arg(long)]
@@ -58,6 +61,11 @@ enum Command {
         date: Option<String>,
     },
     List,
+    /// Einen der letzten Einträge als Vorlage für einen neuen Eintrag verwenden.
+    History {
+        #[arg(long, default_value_t = 10)]
+        limit: usize,
+    },
     Pull {
         date: Option<String>,
         #[arg(long = "from")]
@@ -432,6 +440,19 @@ async fn run(cli: Cli) -> Result<(), String> {
                 )
             }
         }
+        Command::History { limit } => {
+            let entries = mediator
+                .send(ListTimeEntries {
+                    from: None,
+                    to: None,
+                    include_deleted: false,
+                })
+                .await?;
+            let templates = entries.into_iter().rev().take(limit).collect();
+            let entry = interactive::reuse_time_entry(templates)?;
+            let id = mediator.send(CreateTimeEntry { entry }).await?;
+            println!("Eintrag #{id} aus Verlauf erfasst.")
+        }
         Command::Week { date } => {
             let (a, b) = week(date.as_deref())?;
             let es = mediator
@@ -460,6 +481,7 @@ async fn run(cli: Cli) -> Result<(), String> {
             println!("Eintrag #{id} zum Löschen vorgemerkt.")
         }
         Command::Add {
+            interactive: force_interactive,
             date,
             hours,
             description,
@@ -468,26 +490,46 @@ async fn run(cli: Cli) -> Result<(), String> {
             task_id,
             task_name,
         } => {
-            let (Some(hours), Some(description)) = (hours, description) else {
-                return Err(
-                    "Rust add ist nicht-interaktiv: --hours und --description angeben.".into(),
-                );
-            };
-            let e = TimeEntry {
-                id: 0,
-                work_date: date.unwrap_or_else(|| Local::now().date_naive().to_string()),
-                project_id,
-                project_name,
-                task_id,
-                task_name,
-                hours,
-                description: Some(description),
-                remote_id: None,
-                status: "new".into(),
-                entry_status: None,
-                error: None,
-            };
-            let id = mediator.send(CreateTimeEntry { entry: e }).await?;
+            let choose_history = date.is_none()
+                && hours.is_none()
+                && description.is_none()
+                && project_id.is_none()
+                && project_name.is_none()
+                && task_id.is_none()
+                && task_name.is_none();
+            if choose_history {
+                let entries = mediator
+                    .send(ListTimeEntries {
+                        from: None,
+                        to: None,
+                        include_deleted: false,
+                    })
+                    .await?;
+                if let Some(entry) =
+                    interactive::choose_add_mode(entries.into_iter().rev().take(10).collect())?
+                {
+                    let id = mediator.send(CreateTimeEntry { entry }).await?;
+                    println!("Eintrag #{id} aus Verlauf erfasst.");
+                    return Ok(());
+                }
+            }
+            let interactive = force_interactive || hours.is_none() || description.is_none();
+            let entry = interactive::complete_time_entry(
+                &p,
+                &c,
+                interactive::AddInput {
+                    interactive,
+                    date,
+                    hours,
+                    description,
+                    project_id,
+                    project_name,
+                    task_id,
+                    task_name,
+                },
+            )
+            .await?;
+            let id = mediator.send(CreateTimeEntry { entry }).await?;
             println!("Eintrag #{id} erfasst.")
         }
         Command::Edit { id } => {

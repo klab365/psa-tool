@@ -8,5 +8,7 @@ pub mod commands;
 pub mod config;
 pub mod dataverse;
 pub mod db;
+pub mod interactive;
 pub mod model;
 pub mod paths;
+pub mod project_search;
