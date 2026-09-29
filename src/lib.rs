@@ -7,6 +7,7 @@ pub mod auth;
 pub mod commands;
 pub mod config;
 pub mod dataverse;
+pub mod dates;
 pub mod db;
 pub mod interactive;
 pub mod model;

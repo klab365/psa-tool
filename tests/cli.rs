@@ -53,7 +53,12 @@ fn local_entry_workflow_uses_shared_home_directory() {
 
     let output = psa(&home, &["list"]);
     let output = stdout(output);
-    assert!(output.contains("#1 2026-09-01 7.5h Projekt A Task A [new]"));
+    assert!(output.contains("#1"));
+    assert!(output.contains("2026-09-01"));
+    assert!(output.contains("7.5h"));
+    assert!(output.contains("Projekt A"));
+    assert!(output.contains("Task A"));
+    assert!(output.contains("offen"));
 
     let output = psa(&home, &["week", "2026-09-01"]);
     let output = stdout(output);
@@ -66,7 +71,7 @@ fn local_entry_workflow_uses_shared_home_directory() {
         stdout(psa(&home, &["sync", "--dry-run"]))
             .contains("[dry-run] CREATE 2026-09-01 | Projekt A | 7.5h")
     );
-    assert!(stdout(psa(&home, &["list"])).contains("[new]"));
+    assert!(stdout(psa(&home, &["list"])).contains("offen"));
 
     let output = psa(&home, &["remove", "1"]);
     assert!(stdout(output).contains("Eintrag #1 zum Löschen vorgemerkt."));
