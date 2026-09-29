@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/klab365/psa-tool/compare/psa-tool-v1.3.0...psa-tool-v1.4.0) (2026-09-29)
+
+
+### Features
+
+* cache access token and rotate refresh token silently ([#17](https://github.com/klab365/psa-tool/issues/17)) ([75b203c](https://github.com/klab365/psa-tool/commit/75b203ce8cd35940e13ea9b3454e1fe320318290))
+
 ## [1.3.0](https://github.com/klab365/psa-tool/compare/psa-tool-v1.2.1...psa-tool-v1.3.0) (2026-09-29)
 
 
