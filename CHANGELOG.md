@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/klab365/psa-tool/compare/psa-tool-v1.2.1...psa-tool-v1.3.0) (2026-09-29)
+
+
+### Features
+
+* improve CLI tables, history picker and interactive add ([#15](https://github.com/klab365/psa-tool/issues/15)) ([d644ace](https://github.com/klab365/psa-tool/commit/d644acefb0c432fa76b47277fb69b711d338b8fc))
+
 ## [1.2.1](https://github.com/klab365/psa-tool/compare/psa-tool-v1.2.0...psa-tool-v1.2.1) (2026-09-28)
 
 
