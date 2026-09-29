@@ -17,6 +17,7 @@ path = "src/lib.rs"
 chrono = "0.4.41"
 chrono-tz = "0.10.4"
 clap = { version = "4.5.41", features = ["derive"] }
+comfy-table = "7"
 directories = "6.0.0"
 inquire = "0.7.5"
 medi-rs = "2.4.0"

@@ -73,7 +73,7 @@ pub fn list(
     if !deleted {
         q.push_str(" AND status != 'deleted'")
     };
-    q.push_str(" ORDER BY work_date,id");
+    q.push_str(" ORDER BY work_date DESC,id DESC");
     let mut s = c.prepare(&q)?;
     let rows = match (from, to) {
         (Some(a), Some(b)) => s.query_map(params![a, b], TimeEntry::from_row)?,
@@ -101,6 +101,13 @@ pub fn insert(
 }
 pub fn update_synced(c: &Connection, id: i64, e: &TimeEntry) -> rusqlite::Result<()> {
     c.execute("UPDATE time_entries SET work_date=?,project_id=?,project_name=?,task_id=?,task_name=?,hours=?,description=?,entry_status=?,status='synced',error=NULL,updated_at=? WHERE id=?",params![e.work_date,e.project_id,e.project_name,e.task_id,e.task_name,e.hours,e.description,e.entry_status,now(),id])?;
+    Ok(())
+}
+
+/// Persists a local edit. Entries that were never synced stay `new`; already
+/// synced entries become `modified` so the next `psa sync` pushes the change.
+pub fn update_local(c: &Connection, id: i64, e: &TimeEntry) -> rusqlite::Result<()> {
+    c.execute("UPDATE time_entries SET work_date=?,project_id=?,project_name=?,task_id=?,task_name=?,hours=?,description=?,status=CASE WHEN remote_id IS NULL THEN 'new' ELSE 'modified' END,error=NULL,updated_at=? WHERE id=?",params![e.work_date,e.project_id,e.project_name,e.task_id,e.task_name,e.hours,e.description,now(),id])?;
     Ok(())
 }
 pub fn mark_deleted(c: &Connection, id: i64) -> rusqlite::Result<bool> {

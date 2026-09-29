@@ -36,10 +36,16 @@ Danach können Einträge abgerufen und erfasst werden:
 ```bash
 psa pull
 psa add
+psa edit 3 # Eintrag interaktiv bearbeiten
 psa history # letzten Eintrag als Vorlage wählen
 psa week
 psa sync --dry-run
 ```
+
+`psa list` und `psa week` geben eine Tabelle aus, die sich an die Breite des
+Terminals anpasst und die neuesten Einträge zuerst zeigt. Datumsargumente wie
+bei `psa add --date`, `psa week` oder `psa pull` akzeptieren neben
+`YYYY-MM-DD` auch Kurzformen wie `01.09.`, `gestern`, `Montag` oder `+2`.
 
 ### Entwicklung
 
