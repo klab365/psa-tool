@@ -6,6 +6,16 @@
 
 use chrono::{Datelike, Duration, Local, NaiveDate, Weekday};
 
+/// Returns the Monday-to-Sunday range containing the given date (or today).
+pub fn week(date: Option<&str>) -> Result<(String, String), String> {
+    let day = match date {
+        Some(input) => parse_date(input)?,
+        None => Local::now().date_naive(),
+    };
+    let start = day - Duration::days(day.weekday().num_days_from_monday() as i64);
+    Ok((start.to_string(), (start + Duration::days(6)).to_string()))
+}
+
 /// Parses a user supplied date. Empty input means "today".
 pub fn parse_date(input: &str) -> Result<NaiveDate, String> {
     parse_date_from(input, Local::now().date_naive())

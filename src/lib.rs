@@ -14,6 +14,7 @@ pub mod dataverse;
 pub mod dates;
 pub mod db;
 pub mod interactive;
+pub mod mapping;
 pub mod model;
 pub mod paths;
 pub mod project_search;
