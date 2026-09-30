@@ -291,25 +291,8 @@ pub async fn complete_time_entry(
         task_name,
     } = input;
 
-    // Local fields first so the core entry is captured before the optional
-    // Dataverse lookups, which may be slower or require a login.
-    let work_date = match date {
-        Some(date) => dates::parse_date(&date)?.to_string(),
-        None if interactive => prompt_date(Some(Local::now().date_naive().to_string()))?,
-        None => Local::now().date_naive().to_string(),
-    };
-    let hours = match hours {
-        Some(hours) if hours > 0.0 => hours,
-        Some(_) => return Err("Stunden müssen eine positive Zahl sein.".into()),
-        None if interactive => prompt_hours(Some(8.0))?,
-        None => return Err("--hours angeben oder --interactive verwenden.".into()),
-    };
-    let description = match description {
-        Some(description) => description,
-        None if interactive => prompt("Beschreibung:", None)?,
-        None => return Err("--description angeben oder --interactive verwenden.".into()),
-    };
-
+    // Projekt und Task zuerst erfassen, damit der Kern des Eintrags
+    // (Zuordnung) feststeht, bevor Datum, Stunden und Beschreibung folgen.
     let project = if interactive && project_id.is_none() && project_name.is_none() {
         choose_project(paths, config).await?
     } else {
@@ -331,6 +314,23 @@ pub async fn complete_time_entry(
     };
     let task_id = task.as_ref().map(|task| task.id.clone()).or(task_id);
     let task_name = task.as_ref().map(|task| task.name.clone()).or(task_name);
+
+    let work_date = match date {
+        Some(date) => dates::parse_date(&date)?.to_string(),
+        None if interactive => prompt_date(Some(Local::now().date_naive().to_string()))?,
+        None => Local::now().date_naive().to_string(),
+    };
+    let hours = match hours {
+        Some(hours) if hours > 0.0 => hours,
+        Some(_) => return Err("Stunden müssen eine positive Zahl sein.".into()),
+        None if interactive => prompt_hours(Some(8.0))?,
+        None => return Err("--hours angeben oder --interactive verwenden.".into()),
+    };
+    let description = match description {
+        Some(description) => description,
+        None if interactive => prompt("Beschreibung:", None)?,
+        None => return Err("--description angeben oder --interactive verwenden.".into()),
+    };
 
     Ok(TimeEntry {
         id: 0,

@@ -33,6 +33,8 @@ pub fn default_config() -> Value {
             "projectEntitySet": "msdyn_projects",
             "projectIdField": "msdyn_projectid",
             "projectNameField": "msdyn_subject",
+            "projectStateField": "statecode",
+            "projectActiveValue": "0",
             "taskEntitySet": "msdyn_projecttasks",
             "taskIdField": "msdyn_projecttaskid",
             "taskNameField": "msdyn_subject",
@@ -40,7 +42,11 @@ pub fn default_config() -> Value {
             "restrictToMyProjects": true,
             "myProjectsEntitySet": "msdyn_projectteams",
             "myProjectsResourceValueField": "_msdyn_bookableresourceid_value",
-            "myProjectsProjectValueField": "_msdyn_project_value"
+            "myProjectsProjectValueField": "_msdyn_project_value",
+            "restrictToMyTasks": true,
+            "myTasksEntitySet": "msdyn_resourceassignments",
+            "myTasksResourceValueField": "_msdyn_bookableresource_value",
+            "myTasksProjectValueField": "_msdyn_project_value"
         }
     })
 }
