@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/klab365/psa-tool/compare/psa-tool-v1.6.0...psa-tool-v1.6.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* correct resource assignment lookup fields and speed up project picker ([#24](https://github.com/klab365/psa-tool/issues/24)) ([c87286c](https://github.com/klab365/psa-tool/commit/c87286c710e76043f913a73404f4ae721ec5efa7))
+
 ## [1.6.0](https://github.com/klab365/psa-tool/compare/psa-tool-v1.5.0...psa-tool-v1.6.0) (2026-09-30)
 
 
