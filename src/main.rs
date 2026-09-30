@@ -229,12 +229,14 @@ fn entry_body(e: &TimeEntry, c: &Value) -> Value {
         format!("{}T00:00:00Z", e.work_date)
     };
     b.insert(value(m, "/dateField").to_owned(), json!(date));
-    let dur = if value(m, "/durationUnit") == "hours" {
-        e.hours
+    if value(m, "/durationUnit") == "hours" {
+        b.insert(value(m, "/durationField").to_owned(), json!(e.hours));
     } else {
-        (e.hours * 60.).round()
-    };
-    b.insert(value(m, "/durationField").to_owned(), json!(dur));
+        // `msdyn_duration` is an Edm.Int32. Keep the rounded minute value an
+        // integer in JSON; serializing the intermediate f64 emits e.g. 360.0.
+        let minutes = (e.hours * 60.).round() as i32;
+        b.insert(value(m, "/durationField").to_owned(), json!(minutes));
+    }
     b.insert(
         value(m, "/descriptionField").to_owned(),
         json!(e.description),
@@ -477,7 +479,9 @@ async fn sync(
         };
         if let Err(x) = result {
             db::error(conn, e.id, &x).map_err(|z| z.to_string())?;
-            eprintln!("✘ Fehler bei {label}: {x}")
+            eprintln!("✘ Fehler bei {label}: {x}");
+        } else {
+            println!("✓ Synchronisiert: {label}");
         }
     }
     Ok(())
@@ -661,5 +665,27 @@ mod tests {
         let mapping = json!({"dateOnly": "false", "timezone": "Europe/Zurich"});
         assert!(!config_bool(&mapping["dateOnly"]));
         assert_eq!(local_date("2026-08-31T22:00:00Z", &mapping), "2026-09-01");
+    }
+
+    #[test]
+    fn entry_body_serializes_minute_durations_as_integers() {
+        let entry = TimeEntry {
+            id: 1,
+            work_date: "2026-09-29".into(),
+            project_id: None,
+            project_name: None,
+            task_id: None,
+            task_name: None,
+            hours: 6.0,
+            description: None,
+            remote_id: None,
+            status: "pending".into(),
+            entry_status: None,
+            error: None,
+        };
+
+        let body = entry_body(&entry, &config::default_config());
+
+        assert_eq!(body["msdyn_duration"].as_i64(), Some(360));
     }
 }

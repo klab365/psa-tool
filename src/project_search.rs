@@ -11,7 +11,7 @@ pub struct LookupItem {
 
 impl std::fmt::Display for LookupItem {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "{} ({})", self.name, self.id)
+        formatter.write_str(&self.name)
     }
 }
 
@@ -69,6 +69,41 @@ async fn my_project_ids(paths: &AppPaths, config: &Value) -> Result<Option<Vec<S
     ))
 }
 
+/// Liefert die Projekt-IDs, in denen die konfigurierte resourceId mindestens
+/// eine Projektaufgabe (Resource Assignment) hat. Ohne resourceId wird None
+/// zurueckgegeben, damit der Aufrufer keine Projekte anbietet.
+async fn my_task_project_ids(
+    paths: &AppPaths,
+    config: &Value,
+) -> Result<Option<Vec<String>>, String> {
+    let resource_id = config["resourceId"].as_str().unwrap_or("");
+    if resource_id.is_empty() {
+        return Ok(None);
+    }
+    let entity_set = value(config, "/mapping/myTasksEntitySet")?;
+    let resource_field = value(config, "/mapping/myTasksResourceValueField")?;
+    let project_field = value(config, "/mapping/myTasksProjectValueField")?;
+    let response = client(paths, config)
+        .await?
+        .get(
+            &format!(
+                "/{entity_set}?$filter={resource_field} eq {resource_id}&$select={project_field}"
+            ),
+            false,
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    let mut ids: Vec<String> = response["value"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|row| row[project_field].as_str().map(str::to_owned))
+        .collect();
+    ids.sort();
+    ids.dedup();
+    Ok(Some(ids))
+}
+
 /// Finds at most 50 projects. Restricted configurations never expose projects
 /// whose team membership could not be established.
 pub async fn projects(
@@ -83,8 +118,36 @@ pub async fn projects(
     if !query.is_empty() {
         filters.push(format!("contains({name_field},'{}')", escape(query)));
     }
+    // Nur aktive Projekte anbieten: geschlossene/beendete Projekte sind für
+    // die Zeiterfassung nicht mehr relevant.
+    if let (Some(state_field), Some(active_value)) = (
+        config["mapping"]["projectStateField"]
+            .as_str()
+            .filter(|value| !value.is_empty()),
+        config["mapping"]["projectActiveValue"]
+            .as_str()
+            .filter(|value| !value.is_empty()),
+    ) {
+        filters.push(format!("{state_field} eq {active_value}"));
+    }
     if config_bool(&config["mapping"]["restrictToMyProjects"]) {
         let Some(ids) = my_project_ids(paths, config).await? else {
+            return Ok(Vec::new());
+        };
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        filters.push(format!(
+            "({})",
+            ids.iter()
+                .map(|id| format!("{id_field} eq {id}"))
+                .collect::<Vec<_>>()
+                .join(" or ")
+        ));
+    }
+    // Nur Projekte anbieten, in denen die resourceId eine Projektaufgabe hat.
+    if config_bool(&config["mapping"]["restrictToMyTasks"]) {
+        let Some(ids) = my_task_project_ids(paths, config).await? else {
             return Ok(Vec::new());
         };
         if ids.is_empty() {
@@ -174,10 +237,19 @@ async fn lookup(
 
 #[cfg(test)]
 mod tests {
-    use super::escape;
+    use super::{LookupItem, escape};
 
     #[test]
     fn escapes_odata_strings() {
         assert_eq!(escape("O'Brien"), "O''Brien");
+    }
+
+    #[test]
+    fn lookup_item_display_omits_id() {
+        let item = LookupItem {
+            id: "abc-123".into(),
+            name: "Projekt A".into(),
+        };
+        assert_eq!(item.to_string(), "Projekt A");
     }
 }
