@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/klab365/psa-tool/compare/psa-tool-v1.4.0...psa-tool-v1.5.0) (2026-09-30)
+
+
+### Features
+
+* refine interactive capture and project filtering ([#19](https://github.com/klab365/psa-tool/issues/19)) ([3ccc71b](https://github.com/klab365/psa-tool/commit/3ccc71bb18ba2f8d78ed0e2acce6b58fda269a9d))
+
 ## [1.4.0](https://github.com/klab365/psa-tool/compare/psa-tool-v1.3.0...psa-tool-v1.4.0) (2026-09-29)
 
 
