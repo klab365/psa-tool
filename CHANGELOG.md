@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/klab365/psa-tool/compare/psa-tool-v1.5.0...psa-tool-v1.6.0) (2026-09-30)
+
+
+### Features
+
+* add diagnostics, restore and discover improvements ([#21](https://github.com/klab365/psa-tool/issues/21)) ([42304f8](https://github.com/klab365/psa-tool/commit/42304f84272c7a333c20b572181784f238572c30))
+
 ## [1.5.0](https://github.com/klab365/psa-tool/compare/psa-tool-v1.4.0...psa-tool-v1.5.0) (2026-09-30)
 
 
