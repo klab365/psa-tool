@@ -43,6 +43,8 @@ pub fn default_config() -> Value {
             "myProjectsEntitySet": "msdyn_projectteams",
             "myProjectsResourceValueField": "_msdyn_bookableresourceid_value",
             "myProjectsProjectValueField": "_msdyn_project_value",
+            "myProjectsStateField": "statecode",
+            "myProjectsStateValue": "0",
             "restrictToMyTasks": true,
             "myTasksEntitySet": "msdyn_resourceassignments",
             "myTasksResourceValueField": "_msdyn_bookableresource_value",

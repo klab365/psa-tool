@@ -41,7 +41,11 @@ async fn client(paths: &AppPaths, config: &Value) -> Result<Client, String> {
         .map_err(|error| error.to_string())
 }
 
-async fn my_project_ids(paths: &AppPaths, config: &Value) -> Result<Option<Vec<String>>, String> {
+async fn my_project_ids(
+    paths: &AppPaths,
+    config: &Value,
+    only_active: bool,
+) -> Result<Option<Vec<String>>, String> {
     let resource_id = config["resourceId"].as_str().unwrap_or("");
     if resource_id.is_empty() {
         return Ok(None);
@@ -49,12 +53,24 @@ async fn my_project_ids(paths: &AppPaths, config: &Value) -> Result<Option<Vec<S
     let entity_set = value(config, "/mapping/myProjectsEntitySet")?;
     let resource_field = value(config, "/mapping/myProjectsResourceValueField")?;
     let project_field = value(config, "/mapping/myProjectsProjectValueField")?;
+    let mut filter = format!("{resource_field} eq {resource_id}");
+    if only_active {
+        let state_field = config
+            .pointer("/mapping/myProjectsStateField")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let state_value = config
+            .pointer("/mapping/myProjectsStateValue")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        if !state_field.is_empty() && !state_value.is_empty() {
+            filter.push_str(&format!(" and {state_field} eq {state_value}"));
+        }
+    }
     let response = client(paths, config)
         .await?
         .get(
-            &format!(
-                "/{entity_set}?$filter={resource_field} eq {resource_id}&$select={project_field}"
-            ),
+            &format!("/{entity_set}?$filter={filter}&$select={project_field}"),
             false,
         )
         .await
@@ -104,6 +120,37 @@ async fn my_task_project_ids(
     Ok(Some(ids))
 }
 
+/// Lists the projects the current resource is a member of, without the
+/// `$top` limit used by the interactive picker.
+pub async fn my_projects(paths: &AppPaths, config: &Value) -> Result<Vec<LookupItem>, String> {
+    let Some(ids) = my_project_ids(paths, config, false).await? else {
+        return Err(
+            "resourceId ist nicht gesetzt. Zuerst 'psa discover myresource' ausführen.".into(),
+        );
+    };
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let entity_set = value(config, "/mapping/projectEntitySet")?;
+    let id_field = value(config, "/mapping/projectIdField")?;
+    let name_field = value(config, "/mapping/projectNameField")?;
+    let filter = format!(
+        "({})",
+        ids.iter()
+            .map(|id| format!("{id_field} eq {id}"))
+            .collect::<Vec<_>>()
+            .join(" or ")
+    );
+    lookup(
+        paths,
+        config,
+        &format!("/{entity_set}?$filter={filter}&$select={id_field},{name_field}&$orderby={name_field} asc"),
+        id_field,
+        name_field,
+    )
+    .await
+}
+
 /// Finds at most 50 projects. Restricted configurations never expose projects
 /// whose team membership could not be established.
 pub async fn projects(
@@ -131,7 +178,7 @@ pub async fn projects(
         filters.push(format!("{state_field} eq {active_value}"));
     }
     if config_bool(&config["mapping"]["restrictToMyProjects"]) {
-        let Some(ids) = my_project_ids(paths, config).await? else {
+        let Some(ids) = my_project_ids(paths, config, true).await? else {
             return Ok(Vec::new());
         };
         if ids.is_empty() {

@@ -3,6 +3,10 @@
 //! Modules are introduced incrementally while retaining compatibility with the
 //! existing application's files in `~/.psa-tool`.
 
+// The `default_config` JSON literal grows with each mapping option and exceeds
+// the default macro recursion limit; raise it so `serde_json::json!` expands.
+#![recursion_limit = "256"]
+
 pub mod auth;
 pub mod commands;
 pub mod config;

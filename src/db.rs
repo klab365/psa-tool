@@ -129,6 +129,22 @@ pub fn delete(c: &Connection, id: i64) -> rusqlite::Result<()> {
     c.execute("DELETE FROM time_entries WHERE id=?", [id])?;
     Ok(())
 }
+
+/// Undoes a pending deletion. Returns `false` when the entry is not marked as
+/// deleted, and an error when the entry no longer exists.
+pub fn restore(c: &Connection, id: i64) -> rusqlite::Result<bool> {
+    let Some(entry) = get(c, id)? else {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    };
+    if entry.status != "deleted" {
+        return Ok(false);
+    }
+    c.execute(
+        "UPDATE time_entries SET status='synced', error=NULL, updated_at=? WHERE id=?",
+        params![now(), id],
+    )?;
+    Ok(true)
+}
 pub fn synced(c: &Connection, id: i64, remote: &str) -> rusqlite::Result<()> {
     c.execute(
         "UPDATE time_entries SET remote_id=?,status='synced',error=NULL,updated_at=? WHERE id=?",

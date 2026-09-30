@@ -8,7 +8,8 @@ use psa_tool::{
         auth::{Login, Logout},
         config::{GetConfig, SetConfig, ShowConfig},
         time_entries::{
-            CreateTimeEntry, GetTimeEntry, ListTimeEntries, RemoveTimeEntry, UpdateTimeEntry,
+            CreateTimeEntry, GetTimeEntry, ListTimeEntries, RemoveTimeEntry, RestoreTimeEntry,
+            UpdateTimeEntry,
         },
     },
     config,
@@ -16,6 +17,7 @@ use psa_tool::{
     dates, db, interactive,
     model::TimeEntry,
     paths::AppPaths,
+    project_search,
 };
 use serde_json::{Value, json};
 #[derive(Parser)]
@@ -71,10 +73,13 @@ enum Command {
         /// ID des Eintrags (siehe `psa list`).
         id: i64,
     },
-    /// Einen Eintrag löschen (lokal oder in Dataverse).
+    /// Einen Eintrag löschen (lokal oder in Dataverse) oder wiederherstellen.
     Remove {
         /// ID des Eintrags (siehe `psa list`).
         id: i64,
+        /// Gelöschten Eintrag wiederherstellen statt löschen.
+        #[arg(long)]
+        undo: bool,
     },
     /// Alle Einträge einer Woche anzeigen.
     Week {
@@ -106,6 +111,8 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Konfiguration, Anmeldung und Datenbank prüfen.
+    Doctor,
     /// Dataverse-Metadaten untersuchen.
     Discover {
         #[command(subcommand)]
@@ -162,13 +169,31 @@ fn week(date: Option<&str>) -> Result<(String, String), String> {
     let start = d - Duration::days((d.weekday().num_days_from_monday()) as i64);
     Ok((start.to_string(), (start + Duration::days(6)).to_string()))
 }
-fn status_label(status: &str) -> &str {
-    match status {
+fn status_label(entry: &TimeEntry) -> String {
+    let base = match entry.status.as_str() {
         "new" => "offen",
         "modified" => "geändert",
         "deleted" => "gelöscht",
         "synced" => "synchronisiert",
         other => other,
+    };
+    match entry
+        .entry_status
+        .as_deref()
+        .filter(|status| !status.is_empty())
+    {
+        Some(status) => format!("{base} · {status}"),
+        None => base.to_owned(),
+    }
+}
+
+fn truncate(text: &str, max: usize) -> String {
+    if text.chars().count() <= max {
+        text.to_owned()
+    } else {
+        let mut shortened: String = text.chars().take(max.saturating_sub(1)).collect();
+        shortened.push('…');
+        shortened
     }
 }
 fn entries_table(entries: &[TimeEntry]) -> Table {
@@ -179,7 +204,7 @@ fn entries_table(entries: &[TimeEntry]) -> Table {
         // falls back to the full content width when piped.
         .set_content_arrangement(ContentArrangement::Dynamic)
         .set_header(vec![
-            "ID", "Datum", "Std.", "Projekt", "Task", "Text", "Status",
+            "ID", "Datum", "Std.", "Projekt", "Task", "Text", "Status", "Fehler",
         ]);
     for entry in entries {
         table.add_row(vec![
@@ -189,7 +214,8 @@ fn entries_table(entries: &[TimeEntry]) -> Table {
             entry.project_name.clone().unwrap_or_default(),
             entry.task_name.clone().unwrap_or_default(),
             entry.description.clone().unwrap_or_default(),
-            status_label(&entry.status).to_owned(),
+            status_label(entry),
+            truncate(entry.error.as_deref().unwrap_or(""), 40),
         ]);
     }
     // Keep the compact columns on a single line; project, task and text may
@@ -411,6 +437,10 @@ async fn sync(
         Some(client(paths, c).await?)
     };
     let m = &c["mapping"];
+    let mut created = 0;
+    let mut updated = 0;
+    let mut deleted = 0;
+    let mut failed = 0;
     for e in pending {
         let label = format!(
             "{} | {} | {}h",
@@ -418,6 +448,11 @@ async fn sync(
             e.project_name.as_deref().unwrap_or("?"),
             e.hours
         );
+        let kind = match e.status.as_str() {
+            "deleted" => "deleted",
+            "new" => "created",
+            _ => "updated",
+        };
         let result = match e.status.as_str() {
             "deleted" => {
                 if dry {
@@ -477,15 +512,127 @@ async fn sync(
                 }
             }
         };
-        if let Err(x) = result {
-            db::error(conn, e.id, &x).map_err(|z| z.to_string())?;
-            eprintln!("✘ Fehler bei {label}: {x}");
-        } else {
-            println!("✓ Synchronisiert: {label}");
+        match result {
+            Ok(()) => {
+                match kind {
+                    "deleted" => deleted += 1,
+                    "created" => created += 1,
+                    _ => updated += 1,
+                }
+                if !dry {
+                    println!("✓ Synchronisiert: {label}");
+                }
+            }
+            Err(x) => {
+                failed += 1;
+                db::error(conn, e.id, &x).map_err(|z| z.to_string())?;
+                eprintln!("✘ Fehler bei {label}: {x}")
+            }
         }
     }
+    let summary = if dry {
+        format!("Dry-run fertig: {created} erstellen, {updated} aktualisieren, {deleted} löschen.")
+    } else if failed == 0 {
+        format!("Sync fertig: {created} erstellt, {updated} aktualisiert, {deleted} gelöscht.")
+    } else {
+        format!(
+            "Sync fertig: {created} erstellt, {updated} aktualisiert, {deleted} gelöscht, {failed} fehlgeschlagen."
+        )
+    };
+    println!("{summary}");
     Ok(())
 }
+fn report(ok: bool, label: &str, hint: &str) -> bool {
+    let suffix = if ok || hint.is_empty() {
+        String::new()
+    } else {
+        format!(" ({hint})")
+    };
+    println!("{} {label}{suffix}", if ok { "✓" } else { "✘" });
+    ok
+}
+
+async fn doctor(paths: &AppPaths, c: &Value) -> Result<(), String> {
+    let mut healthy = true;
+
+    let env = value(c, "/environmentUrl");
+    healthy &= report(
+        !env.is_empty(),
+        "environmentUrl gesetzt",
+        "psa config set environmentUrl <URL>",
+    );
+
+    let client_id = value(c, "/clientId");
+    healthy &= report(
+        !client_id.is_empty(),
+        "clientId gesetzt",
+        "psa config set clientId <ID>",
+    );
+
+    let resource_id = value(c, "/resourceId");
+    healthy &= report(
+        !resource_id.is_empty(),
+        "resourceId gesetzt",
+        "psa discover myresource",
+    );
+
+    let timezone = value(c, "/mapping/timezone");
+    healthy &= report(
+        timezone.parse::<Tz>().is_ok(),
+        &format!("Zeitzone gültig ({timezone})"),
+        "psa config set mapping.timezone <IANA>",
+    );
+
+    let logged_in = paths.token_cache_file.exists();
+    healthy &= report(logged_in, "Angemeldet (Token-Cache vorhanden)", "psa login");
+
+    match db::open(paths) {
+        Ok(connection) => {
+            let total = db::list(&connection, None, None, true)
+                .map(|entries| entries.len())
+                .unwrap_or(0);
+            let pending = db::pending(&connection)
+                .map(|entries| entries.len())
+                .unwrap_or(0);
+            report(
+                true,
+                &format!("Datenbank lesbar ({total} Einträge, {pending} ausstehend)"),
+                "",
+            );
+        }
+        Err(error) => {
+            healthy = false;
+            println!("✘ Datenbank nicht lesbar: {error}");
+        }
+    }
+
+    if !env.is_empty() && logged_in {
+        match client(paths, c).await {
+            Ok(dv) => match dv.get("/WhoAmI", false).await {
+                Ok(who) => {
+                    let user = who["UserId"].as_str().unwrap_or("?");
+                    report(true, &format!("Dataverse erreichbar (UserId={user})"), "");
+                }
+                Err(error) => {
+                    healthy = false;
+                    println!("✘ Dataverse nicht erreichbar: {error}");
+                }
+            },
+            Err(error) => {
+                healthy = false;
+                println!("✘ Anmeldung konnte nicht geprüft werden: {error}");
+            }
+        }
+    }
+
+    if healthy {
+        println!("Alles in Ordnung.");
+        Ok(())
+    } else {
+        Err("Einige Prüfungen sind fehlgeschlagen – siehe Ausgabe oben.".into())
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
@@ -555,9 +702,14 @@ async fn run(cli: Cli) -> Result<(), String> {
             let total: f64 = es.iter().map(|e| e.hours).sum();
             println!("  Summe: {total}h")
         }
-        Command::Remove { id } => {
-            mediator.send(RemoveTimeEntry { id }).await?;
-            println!("Eintrag #{id} zum Löschen vorgemerkt.")
+        Command::Remove { id, undo } => {
+            if undo {
+                mediator.send(RestoreTimeEntry { id }).await?;
+                println!("Eintrag #{id} wiederhergestellt.")
+            } else {
+                mediator.send(RemoveTimeEntry { id }).await?;
+                println!("Eintrag #{id} zum Löschen vorgemerkt.")
+            }
         }
         Command::Add {
             interactive: force_interactive,
@@ -625,35 +777,91 @@ async fn run(cli: Cli) -> Result<(), String> {
             let d = db::open(&p).map_err(|e| e.to_string())?;
             sync(&d, &p, &c, dry_run).await?
         }
+        Command::Doctor => doctor(&p, &c).await?,
         Command::Discover { command } => discover(&p, &c, command).await?,
     };
     Ok(())
 }
 async fn discover(p: &AppPaths, c: &Value, x: Discover) -> Result<(), String> {
-    let d = client(p, c).await?;
-    let path = match x {
-        Discover::Entity { logical_name } => format!(
-            "/EntityDefinitions(LogicalName='{logical_name}')?$select=LogicalName,EntitySetName,PrimaryIdAttribute,PrimaryNameAttribute"
-        ),
-        Discover::Find { text } => format!(
-            "/EntityDefinitions?$select=LogicalName,EntitySetName,DisplayName&$filter=contains(LogicalName,'{}')",
-            text.replace('\'', "''")
-        ),
-        Discover::Myresource => "/WhoAmI".into(),
-        Discover::Myprojects => return Err("discover myprojects ist noch nicht verfügbar.".into()),
-        Discover::Bindname {
-            entity_logical_name,
-            attribute_logical_name,
-        } => format!(
-            "/EntityDefinitions(LogicalName='{entity_logical_name}')/Attributes(LogicalName='{attribute_logical_name}')/Microsoft.Dynamics.CRM.LookupAttributeMetadata?$select=SchemaName,LogicalName"
-        ),
-    };
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&d.get(&path, false).await.map_err(|e| e.to_string())?)
-            .unwrap()
-    );
-    Ok(())
+    match x {
+        Discover::Myprojects => {
+            let projects = project_search::my_projects(p, c).await?;
+            if projects.is_empty() {
+                println!("Keine Projekte gefunden.");
+            } else {
+                for project in projects {
+                    println!("{project}");
+                }
+            }
+            Ok(())
+        }
+        Discover::Entity { logical_name } => {
+            let d = client(p, c).await?;
+            let meta = d
+                .get(
+                    &format!(
+                        "/EntityDefinitions(LogicalName='{logical_name}')?$select=LogicalName,EntitySetName,PrimaryIdAttribute,PrimaryNameAttribute"
+                    ),
+                    false,
+                )
+                .await
+                .map_err(|e| e.to_string())?;
+            println!("{}", serde_json::to_string_pretty(&meta).unwrap());
+
+            let attrs = d
+                .get(
+                    &format!(
+                        "/EntityDefinitions(LogicalName='{logical_name}')/Attributes?$select=LogicalName,AttributeType"
+                    ),
+                    false,
+                )
+                .await
+                .map_err(|e| e.to_string())?;
+            let mut attributes: Vec<String> = attrs["value"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|attr| {
+                    Some(format!(
+                        "{:<40} {}",
+                        attr["LogicalName"].as_str()?,
+                        attr["AttributeType"].as_str()?
+                    ))
+                })
+                .collect();
+            attributes.sort();
+            println!("\nAttribute:");
+            for attribute in attributes {
+                println!("  {attribute}");
+            }
+            Ok(())
+        }
+        command => {
+            let d = client(p, c).await?;
+            let path = match command {
+                Discover::Find { text } => format!(
+                    "/EntityDefinitions?$select=LogicalName,EntitySetName,DisplayName&$filter=contains(LogicalName,'{}')",
+                    text.replace('\'', "''")
+                ),
+                Discover::Myresource => "/WhoAmI".into(),
+                Discover::Bindname {
+                    entity_logical_name,
+                    attribute_logical_name,
+                } => format!(
+                    "/EntityDefinitions(LogicalName='{entity_logical_name}')/Attributes(LogicalName='{attribute_logical_name}')/Microsoft.Dynamics.CRM.LookupAttributeMetadata?$select=SchemaName,LogicalName"
+                ),
+                Discover::Entity { .. } | Discover::Myprojects => unreachable!("handled above"),
+            };
+            println!(
+                "{}",
+                serde_json::to_string_pretty(
+                    &d.get(&path, false).await.map_err(|e| e.to_string())?
+                )
+                .unwrap()
+            );
+            Ok(())
+        }
+    }
 }
 
 #[cfg(test)]
