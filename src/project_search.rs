@@ -177,13 +177,33 @@ pub async fn projects(
     ) {
         filters.push(format!("{state_field} eq {active_value}"));
     }
-    if config_bool(&config["mapping"]["restrictToMyProjects"]) {
-        let Some(ids) = my_project_ids(paths, config, true).await? else {
+    let restrict_projects = config_bool(&config["mapping"]["restrictToMyProjects"]);
+    let restrict_tasks = config_bool(&config["mapping"]["restrictToMyTasks"]);
+    // Team-Mitgliedschaft und Aufgaben-Zuordnung sind unabhängig und werden
+    // parallel abgefragt, um die Latenz des Projekt-Pickers zu reduzieren.
+    let (team_ids, task_ids) = tokio::join!(
+        async {
+            if restrict_projects {
+                my_project_ids(paths, config, true).await
+            } else {
+                Ok(None)
+            }
+        },
+        async {
+            if restrict_tasks {
+                my_task_project_ids(paths, config).await
+            } else {
+                Ok(None)
+            }
+        },
+    );
+    let team_ids = team_ids?;
+    let task_ids = task_ids?;
+
+    if restrict_projects {
+        let Some(ids) = team_ids.filter(|ids| !ids.is_empty()) else {
             return Ok(Vec::new());
         };
-        if ids.is_empty() {
-            return Ok(Vec::new());
-        }
         filters.push(format!(
             "({})",
             ids.iter()
@@ -193,13 +213,10 @@ pub async fn projects(
         ));
     }
     // Nur Projekte anbieten, in denen die resourceId eine Projektaufgabe hat.
-    if config_bool(&config["mapping"]["restrictToMyTasks"]) {
-        let Some(ids) = my_task_project_ids(paths, config).await? else {
+    if restrict_tasks {
+        let Some(ids) = task_ids.filter(|ids| !ids.is_empty()) else {
             return Ok(Vec::new());
         };
-        if ids.is_empty() {
-            return Ok(Vec::new());
-        }
         filters.push(format!(
             "({})",
             ids.iter()

@@ -47,8 +47,8 @@ pub fn default_config() -> Value {
             "myProjectsStateValue": "0",
             "restrictToMyTasks": true,
             "myTasksEntitySet": "msdyn_resourceassignments",
-            "myTasksResourceValueField": "_msdyn_bookableresource_value",
-            "myTasksProjectValueField": "_msdyn_project_value"
+            "myTasksResourceValueField": "_msdyn_bookableresourceid_value",
+            "myTasksProjectValueField": "_msdyn_projectid_value"
         }
     })
 }
@@ -78,7 +78,45 @@ pub fn load(paths: &AppPaths) -> Result<Value, ConfigError> {
     }
     let raw = fs::read_to_string(&paths.config_file)?;
     let user_config = serde_json::from_str(&raw)?;
-    Ok(deep_merge(&default_config(), &user_config))
+    Ok(migrate(deep_merge(&default_config(), &user_config)))
+}
+
+/// Corrects known-invalid mapping values that older releases persisted.
+///
+/// `psa config set` writes the fully merged configuration back to disk, so
+/// wrong defaults could end up stored as explicit overrides. These stored
+/// values take precedence over the corrected defaults and must be fixed here.
+fn migrate(config: Value) -> Value {
+    let mut config = config;
+    let Some(mapping) = config.get_mut("mapping").and_then(Value::as_object_mut) else {
+        return config;
+    };
+
+    // `msdyn_resourceassignment` uses `msdyn_bookableresourceid` and
+    // `msdyn_projectid` as lookups, unlike `msdyn_projectteam` which uses
+    // `msdyn_bookableresourceid` and `msdyn_project`.
+    if mapping
+        .get("myTasksResourceValueField")
+        .and_then(Value::as_str)
+        == Some("_msdyn_bookableresource_value")
+    {
+        mapping.insert(
+            "myTasksResourceValueField".into(),
+            Value::String("_msdyn_bookableresourceid_value".into()),
+        );
+    }
+    if mapping
+        .get("myTasksProjectValueField")
+        .and_then(Value::as_str)
+        == Some("_msdyn_project_value")
+    {
+        mapping.insert(
+            "myTasksProjectValueField".into(),
+            Value::String("_msdyn_projectid_value".into()),
+        );
+    }
+
+    config
 }
 
 pub fn save(paths: &AppPaths, config: &Value) -> Result<(), ConfigError> {
@@ -152,5 +190,35 @@ mod tests {
         let mut config = default_config();
         set_value(&mut config, "mapping.dateOnly", "true".to_owned()).unwrap();
         assert_eq!(config["mapping"]["dateOnly"], "true");
+    }
+
+    #[test]
+    fn migrate_fixes_persisted_my_tasks_lookup_fields() {
+        let mut config = default_config();
+        config["mapping"]["myTasksResourceValueField"] = json!("_msdyn_bookableresource_value");
+        config["mapping"]["myTasksProjectValueField"] = json!("_msdyn_project_value");
+        let migrated = migrate(config);
+        assert_eq!(
+            migrated["mapping"]["myTasksResourceValueField"],
+            "_msdyn_bookableresourceid_value"
+        );
+        assert_eq!(
+            migrated["mapping"]["myTasksProjectValueField"],
+            "_msdyn_projectid_value"
+        );
+    }
+
+    #[test]
+    fn migrate_leaves_other_project_value_fields_untouched() {
+        let config = default_config();
+        let migrated = migrate(config);
+        assert_eq!(
+            migrated["mapping"]["myProjectsProjectValueField"],
+            "_msdyn_project_value"
+        );
+        assert_eq!(
+            migrated["mapping"]["taskProjectLookupField"],
+            "_msdyn_project_value"
+        );
     }
 }
