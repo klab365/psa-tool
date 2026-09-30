@@ -20,6 +20,12 @@ pub struct RemoveTimeEntry {
 }
 
 #[derive(MediCommand)]
+#[medi_command(return_type = (), error_type = String)]
+pub struct RestoreTimeEntry {
+    pub id: i64,
+}
+
+#[derive(MediCommand)]
 #[medi_command(return_type = Vec<TimeEntry>, error_type = String)]
 pub struct ListTimeEntries {
     pub from: Option<String>,
@@ -52,6 +58,16 @@ async fn remove_time_entry(context: AppContext, command: RemoveTimeEntry) -> Res
     db::mark_deleted(&connection, command.id)
         .map(|_| ())
         .map_err(|_| format!("Eintrag {} nicht gefunden", command.id))
+}
+
+#[medi_handler]
+async fn restore_time_entry(context: AppContext, command: RestoreTimeEntry) -> Result<(), String> {
+    let connection = db::open(&context.paths).map_err(|error| error.to_string())?;
+    match db::restore(&connection, command.id) {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(format!("Eintrag {} ist nicht gelöscht", command.id)),
+        Err(_) => Err(format!("Eintrag {} nicht gefunden", command.id)),
+    }
 }
 
 #[medi_handler]
@@ -88,6 +104,7 @@ medi_module! {
     commands {
         crate::commands::time_entries::CreateTimeEntry => crate::commands::time_entries::create_time_entry;
         crate::commands::time_entries::RemoveTimeEntry => crate::commands::time_entries::remove_time_entry;
+        crate::commands::time_entries::RestoreTimeEntry => crate::commands::time_entries::restore_time_entry;
         crate::commands::time_entries::ListTimeEntries => crate::commands::time_entries::list_time_entries;
         crate::commands::time_entries::GetTimeEntry => crate::commands::time_entries::get_time_entry;
         crate::commands::time_entries::UpdateTimeEntry => crate::commands::time_entries::update_time_entry;
@@ -223,5 +240,33 @@ mod tests {
             .map(|entry| entry.work_date.as_str())
             .collect();
         assert_eq!(dates, ["2026-09-03", "2026-09-01"]);
+    }
+
+    #[tokio::test]
+    async fn restore_command_undeletes_a_synced_entry() {
+        let home = tempfile::tempdir().expect("temporary home");
+        let paths = crate::paths::AppPaths::for_home(home.path().into());
+        let mediator = crate::commands::AppMediator::new(AppContext::new(
+            paths.clone(),
+            serde_json::Value::Null,
+        ));
+
+        let connection = crate::db::open(&paths).expect("database opens");
+        crate::db::insert(&connection, &entry(), Some("remote-1"), "deleted")
+            .expect("entry is inserted as deleted");
+
+        mediator
+            .send(RestoreTimeEntry { id: 1 })
+            .await
+            .expect("entry is restored");
+
+        let restored = mediator
+            .send(GetTimeEntry { id: 1 })
+            .await
+            .expect("entry is loaded");
+        assert_eq!(restored.status, "synced");
+        assert_eq!(restored.remote_id.as_deref(), Some("remote-1"));
+
+        assert!(mediator.send(RestoreTimeEntry { id: 1 }).await.is_err());
     }
 }

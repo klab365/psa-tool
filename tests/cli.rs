@@ -67,10 +67,9 @@ fn local_entry_workflow_uses_shared_home_directory() {
 
     // No credentials are configured: this proves dry-run does not contact
     // Dataverse and does not modify the pending entry.
-    assert!(
-        stdout(psa(&home, &["sync", "--dry-run"]))
-            .contains("[dry-run] CREATE 2026-09-01 | Projekt A | 7.5h")
-    );
+    let sync_output = stdout(psa(&home, &["sync", "--dry-run"]));
+    assert!(sync_output.contains("[dry-run] CREATE 2026-09-01 | Projekt A | 7.5h"));
+    assert!(sync_output.contains("Dry-run fertig: 1 erstellen"));
     assert!(stdout(psa(&home, &["list"])).contains("offen"));
 
     let output = psa(&home, &["remove", "1"]);
@@ -86,4 +85,15 @@ fn config_show_uses_defaults_without_creating_a_config_file() {
     assert!(output.contains("\"environmentUrl\": \"\""));
     assert!(output.contains("\"timeEntryEntitySet\": \"msdyn_timeentries\""));
     assert!(!home.path().join(".psa-tool/config.json").exists());
+}
+
+#[test]
+fn doctor_reports_configuration_and_login_issues() {
+    let home = tempfile::tempdir().expect("temporary HOME");
+    let output = psa(&home, &["doctor"]);
+    assert!(!output.status.success());
+    let out = String::from_utf8(output.stdout).expect("UTF-8 output");
+    assert!(out.contains("✘ environmentUrl gesetzt"));
+    assert!(out.contains("✘ resourceId gesetzt"));
+    assert!(out.contains("✘ Angemeldet"));
 }
