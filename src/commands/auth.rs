@@ -13,7 +13,7 @@ pub struct Logout;
 
 #[medi_handler]
 async fn login(context: AppContext, _: Login) -> Result<String, String> {
-    let client = Client::new(&context.paths, &context.config, true)
+    let client = Client::new(&context.paths, &context.config, false)
         .await
         .map_err(|error| error.to_string())?;
     let who = client
