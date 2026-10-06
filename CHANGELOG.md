@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.2](https://github.com/klab365/psa-tool/compare/psa-tool-v1.6.1...psa-tool-v1.6.2) (2026-10-06)
+
+
+### Bug Fixes
+
+* use cached refresh token during login ([#27](https://github.com/klab365/psa-tool/issues/27)) ([8dca3b6](https://github.com/klab365/psa-tool/commit/8dca3b602520883156121bb1b20558b32567e5ff))
+
 ## [1.6.1](https://github.com/klab365/psa-tool/compare/psa-tool-v1.6.0...psa-tool-v1.6.1) (2026-09-30)
 
 
