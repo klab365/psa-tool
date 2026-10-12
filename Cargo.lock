@@ -1010,7 +1010,7 @@ dependencies = [
 
 [[package]]
 name = "psa-tool"
-version = "1.6.2"
+version = "1.6.3"
 dependencies = [
  "chrono",
  "chrono-tz",

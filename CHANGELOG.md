@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.3](https://github.com/klab365/psa-tool/compare/psa-tool-v1.6.2...psa-tool-v1.6.3) (2026-10-12)
+
+
+### Bug Fixes
+
+* request Dataverse delegated auth scope ([#29](https://github.com/klab365/psa-tool/issues/29)) ([6a3ba78](https://github.com/klab365/psa-tool/commit/6a3ba7869a57756e9e7920567a5be4632fde29a6))
+
 ## [1.6.2](https://github.com/klab365/psa-tool/compare/psa-tool-v1.6.1...psa-tool-v1.6.2) (2026-10-06)
 
 
