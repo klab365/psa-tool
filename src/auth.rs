@@ -59,7 +59,7 @@ fn scope(config: &Value) -> Result<String, AuthError> {
     if e.is_empty() {
         Err(AuthError::MissingEnvironment)
     } else {
-        Ok(format!("{e}/.default offline_access"))
+        Ok(format!("{e}/user_impersonation offline_access"))
     }
 }
 
@@ -246,6 +246,15 @@ pub fn logout(paths: &AppPaths) -> io::Result<()> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn scope_requests_dataverse_delegated_permission_and_offline_access() {
+        let config = json!({"environmentUrl": "https://org.crm4.dynamics.com/"});
+        assert_eq!(
+            scope(&config).expect("scope is configured"),
+            "https://org.crm4.dynamics.com/user_impersonation offline_access"
+        );
+    }
 
     #[test]
     fn legacy_cache_without_access_token_deserializes() {
