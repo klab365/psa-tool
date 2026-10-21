@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.4](https://github.com/klab365/psa-tool/compare/psa-tool-v1.6.3...psa-tool-v1.6.4) (2026-10-21)
+
+
+### Bug Fixes
+
+* require explicit login for Dataverse commands ([#31](https://github.com/klab365/psa-tool/issues/31)) ([b25a194](https://github.com/klab365/psa-tool/commit/b25a194c10722c6139b4b60b91ae2f467f64a790))
+
 ## [1.6.3](https://github.com/klab365/psa-tool/compare/psa-tool-v1.6.2...psa-tool-v1.6.3) (2026-10-12)
 
 
