@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.5](https://github.com/klab365/psa-tool/compare/psa-tool-v1.6.4...psa-tool-v1.6.5) (2026-10-21)
+
+
+### Bug Fixes
+
+* include local date boundaries in pull ([#33](https://github.com/klab365/psa-tool/issues/33)) ([e592f08](https://github.com/klab365/psa-tool/commit/e592f0839cb973ac844fcc11f69d3e5315a09b98))
+
 ## [1.6.4](https://github.com/klab365/psa-tool/compare/psa-tool-v1.6.3...psa-tool-v1.6.4) (2026-10-21)
 
 
