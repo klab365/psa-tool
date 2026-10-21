@@ -25,6 +25,8 @@ pub enum AuthError {
     OAuth(String),
     #[error("Anmeldung konnte nicht erneuert werden – bitte erneut 'psa login' ausführen ({0})")]
     RefreshFailed(String),
+    #[error("Nicht angemeldet; zuerst 'psa login' ausführen")]
+    LoginRequired,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -150,13 +152,16 @@ pub async fn access_token(
     let scope = scope(config)?;
     let now = Utc::now().timestamp();
 
-    if !force && let Some(cache) = read_cache(paths) {
+    if !force {
+        let cache = read_cache(paths).ok_or(AuthError::LoginRequired)?;
+
         // Reuse a still-valid access token without a network round trip.
         if let Some(token) = valid_cached_token(&cache, now) {
             return Ok(token.to_owned());
         }
 
-        // Rotate the access token by exchanging the refresh token.
+        // Rotate the access token by exchanging the refresh token. Normal
+        // Dataverse commands must never fall back to an interactive login.
         let response = match token_request(
             &http,
             format!("{a}/oauth2/v2.0/token"),
@@ -234,6 +239,17 @@ pub async fn access_token(
     }
 }
 
+/// Returns a cached or silently refreshed token without starting a login.
+///
+/// Use this for regular Dataverse operations. Only `psa login` should call
+/// [`access_token`] with `force` set to `true`.
+pub async fn get_access_token_silent(
+    paths: &AppPaths,
+    config: &Value,
+) -> Result<String, AuthError> {
+    access_token(paths, config, false).await
+}
+
 pub fn logout(paths: &AppPaths) -> io::Result<()> {
     match fs::remove_file(&paths.token_cache_file) {
         Ok(()) => Ok(()),
@@ -254,6 +270,21 @@ mod tests {
             scope(&config).expect("scope is configured"),
             "https://org.crm4.dynamics.com/user_impersonation offline_access"
         );
+    }
+
+    #[tokio::test]
+    async fn silent_token_requires_login_when_cache_is_missing() {
+        let home = tempfile::tempdir().expect("temporary home");
+        let paths = AppPaths::for_home(home.path().to_path_buf());
+        let config = json!({
+            "clientId": "client-id",
+            "environmentUrl": "https://org.crm4.dynamics.com"
+        });
+
+        let error = get_access_token_silent(&paths, &config)
+            .await
+            .expect_err("missing cache requires an explicit login");
+        assert!(matches!(error, AuthError::LoginRequired));
     }
 
     #[test]
