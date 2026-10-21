@@ -40,14 +40,12 @@ async fn pull_time_entries(
         )
     };
     let mapping = &config["mapping"];
+    let date_filter =
+        mapping::date_range_filter(mapping::value(mapping, "/dateField"), &from, &to, mapping)?;
     let filter = format!(
-        "{} eq {} and {} ge {}T00:00:00Z and {} le {}T23:59:59Z",
+        "{} eq {} and {date_filter}",
         mapping::value(mapping, "/resourceLookupValueField"),
         mapping::value(config, "/resourceId"),
-        mapping::value(mapping, "/dateField"),
-        from,
-        mapping::value(mapping, "/dateField"),
-        to
     );
     let select = [
         "/timeEntryIdField",

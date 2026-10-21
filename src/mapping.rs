@@ -4,7 +4,7 @@
 //! Dataverse JSON representation driven by the configured `mapping` section.
 
 use crate::{dataverse::Client, model::TimeEntry, paths::AppPaths};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, NaiveDate, SecondsFormat, TimeZone, Utc};
 use chrono_tz::Tz;
 use serde_json::{Value, json};
 
@@ -35,6 +35,45 @@ pub fn local_date(raw: &str, mapping: &Value) -> String {
     parsed
         .map(|v| v.with_timezone(&timezone).date_naive().to_string())
         .unwrap_or_else(|_| raw.get(..10).unwrap_or(raw).to_owned())
+}
+
+/// Builds an OData predicate covering complete local calendar days.
+///
+/// Dataverse stores date-time fields in UTC, while time entries are displayed
+/// and stored locally using `mapping.timezone`. The upper bound is exclusive so
+/// entries with fractional seconds on the final day are included as well.
+pub fn date_range_filter(
+    field: &str,
+    from: &str,
+    to: &str,
+    mapping: &Value,
+) -> Result<String, String> {
+    if config_bool(&mapping["dateOnly"]) {
+        return Ok(format!("{field} ge {from} and {field} le {to}"));
+    }
+
+    let from = NaiveDate::parse_from_str(from, "%Y-%m-%d")
+        .map_err(|_| format!("Ungültiges Startdatum '{from}' (erwartet YYYY-MM-DD)."))?;
+    let to = NaiveDate::parse_from_str(to, "%Y-%m-%d")
+        .map_err(|_| format!("Ungültiges Enddatum '{to}' (erwartet YYYY-MM-DD)."))?
+        + Duration::days(1);
+    let timezone = value(mapping, "/timezone")
+        .parse::<Tz>()
+        .unwrap_or(chrono_tz::UTC);
+    let utc_boundary = |date: NaiveDate| {
+        timezone
+            .from_local_datetime(&date.and_hms_opt(0, 0, 0).expect("midnight is valid"))
+            .earliest()
+            .expect("a timezone has a valid midnight")
+            .with_timezone(&Utc)
+            .to_rfc3339_opts(SecondsFormat::Secs, true)
+    };
+
+    Ok(format!(
+        "{field} ge {} and {field} lt {}",
+        utc_boundary(from),
+        utc_boundary(to)
+    ))
 }
 
 /// Builds the Dataverse request body for a [`TimeEntry`] from the config.
@@ -99,6 +138,16 @@ mod tests {
         let mapping = json!({"dateOnly": "false", "timezone": "Europe/Zurich"});
         assert!(!config_bool(&mapping["dateOnly"]));
         assert_eq!(local_date("2026-08-31T22:00:00Z", &mapping), "2026-09-01");
+    }
+
+    #[test]
+    fn date_range_uses_local_midnight_boundaries() {
+        let mapping = json!({"dateOnly": false, "timezone": "Europe/Zurich"});
+
+        assert_eq!(
+            date_range_filter("msdyn_date", "2025-10-13", "2025-10-19", &mapping).unwrap(),
+            "msdyn_date ge 2025-10-12T22:00:00Z and msdyn_date lt 2025-10-19T22:00:00Z"
+        );
     }
 
     #[test]
