@@ -30,7 +30,11 @@ impl Client {
         Ok(Self {
             http: reqwest::Client::new(),
             base: format!("{env}/api/data/v9.2"),
-            token: auth::access_token(paths, c, force).await?,
+            token: if force {
+                auth::access_token(paths, c, true).await?
+            } else {
+                auth::get_access_token_silent(paths, c).await?
+            },
         })
     }
     fn request(&self, m: reqwest::Method, path: &str, annotate: bool) -> reqwest::RequestBuilder {
