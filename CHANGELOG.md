@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.6](https://github.com/klab365/psa-tool/compare/psa-tool-v1.6.5...psa-tool-v1.6.6) (2026-10-29)
+
+
+### Bug Fixes
+
+* start device flow when logging in ([#36](https://github.com/klab365/psa-tool/issues/36)) ([7e8eaca](https://github.com/klab365/psa-tool/commit/7e8eacaa2dabfecf047c25e862404124827d26fb))
+
 ## [1.6.5](https://github.com/klab365/psa-tool/compare/psa-tool-v1.6.4...psa-tool-v1.6.5) (2026-10-26)
 
 
