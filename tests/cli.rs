@@ -65,6 +65,16 @@ fn local_entry_workflow_uses_shared_home_directory() {
     assert!(output.contains("Woche 2026-08-31 – 2026-09-06"));
     assert!(output.contains("Summe: 7.5h"));
 
+    let json_output = stdout(psa(&home, &["week", "2026-09-01", "--json"]));
+    let overview: serde_json::Value =
+        serde_json::from_str(&json_output).expect("week JSON is valid");
+    assert_eq!(overview["from"], "2026-08-31");
+    assert_eq!(overview["to"], "2026-09-06");
+    assert_eq!(overview["total_hours"], 7.5);
+    assert_eq!(overview["entries"].as_array().unwrap().len(), 1);
+    assert_eq!(overview["entries"][0]["work_date"], "2026-09-01");
+    assert_eq!(overview["entries"][0]["project_name"], "Projekt A");
+
     // No credentials are configured: this proves dry-run does not contact
     // Dataverse and does not modify the pending entry.
     let sync_output = stdout(psa(&home, &["sync", "--dry-run"]));

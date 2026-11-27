@@ -91,6 +91,9 @@ enum Command {
     Week {
         /// Beliebiger Tag der Woche (Standard: heute).
         date: Option<String>,
+        /// Übersicht als JSON ausgeben.
+        #[arg(long)]
+        json: bool,
     },
     /// Alle lokalen Einträge tabellarisch anzeigen.
     List,
@@ -282,7 +285,7 @@ async fn run(cli: Cli) -> Result<(), String> {
             let id = mediator.send(CreateTimeEntry { entry }).await?;
             println!("Eintrag #{id} aus Verlauf erfasst.")
         }
-        Command::Week { date } => {
+        Command::Week { date, json } => {
             let (from, to) = dates::week(date.as_deref())?;
             let entries = mediator
                 .send(ListTimeEntries {
@@ -291,14 +294,40 @@ async fn run(cli: Cli) -> Result<(), String> {
                     include_deleted: false,
                 })
                 .await?;
-            println!("Woche {from} – {to}");
-            if entries.is_empty() {
-                println!("  Keine Einträge.");
-            } else {
-                println!("{}", entries_table(&entries));
-            }
             let total: f64 = entries.iter().map(|entry| entry.hours).sum();
-            println!("  Summe: {total}h")
+            if json {
+                let output = serde_json::json!({
+                    "from": from,
+                    "to": to,
+                    "entries": entries.iter().map(|entry| serde_json::json!({
+                        "id": entry.id,
+                        "work_date": entry.work_date,
+                        "project_id": entry.project_id,
+                        "project_name": entry.project_name,
+                        "task_id": entry.task_id,
+                        "task_name": entry.task_name,
+                        "hours": entry.hours,
+                        "description": entry.description,
+                        "remote_id": entry.remote_id,
+                        "status": entry.status,
+                        "entry_status": entry.entry_status,
+                        "error": entry.error,
+                    })).collect::<Vec<_>>(),
+                    "total_hours": total,
+                });
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&output).map_err(|error| error.to_string())?
+                );
+            } else {
+                println!("Woche {from} – {to}");
+                if entries.is_empty() {
+                    println!("  Keine Einträge.");
+                } else {
+                    println!("{}", entries_table(&entries));
+                }
+                println!("  Summe: {total}h")
+            }
         }
         Command::Remove { id, undo } => {
             if undo {
