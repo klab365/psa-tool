@@ -5,15 +5,17 @@ use medi_rs::{MediCommand, medi_handler, medi_module};
 
 #[derive(MediCommand)]
 #[medi_command(return_type = String, error_type = String)]
-pub struct Login;
+pub struct Login {
+    pub device_code: bool,
+}
 
 #[derive(MediCommand)]
 #[medi_command(return_type = String, error_type = String)]
 pub struct Logout;
 
 #[medi_handler]
-async fn login(context: AppContext, _: Login) -> Result<String, String> {
-    let client = Client::new(&context.paths, &context.config, true)
+async fn login(context: AppContext, command: Login) -> Result<String, String> {
+    let client = Client::new(&context.paths, &context.config, true, command.device_code)
         .await
         .map_err(|error| error.to_string())?;
     let who = client

@@ -123,7 +123,7 @@ pub fn entry_body(entry: &TimeEntry, config: &Value) -> Value {
 
 /// Creates a Dataverse client using the stored (non-interactive) token.
 pub async fn client(paths: &AppPaths, config: &Value) -> Result<Client, String> {
-    Client::new(paths, config, false)
+    Client::new(paths, config, false, false)
         .await
         .map_err(|error| error.to_string())
 }

@@ -26,7 +26,9 @@ Danach die eigene Dataverse-Organisation konfigurieren und anmelden:
 
 ```bash
 psa config set environmentUrl https://<eureorg>.crm4.dynamics.com
-psa login
+psa login # Browser-Anmeldung (Authorization Code + PKCE)
+# alternativ, z. B. headless/WSL:
+psa login --device-code
 psa config set mapping.timezone Europe/Zurich # oder eure IANA-Zeitzone
 psa config show
 ```
