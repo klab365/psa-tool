@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/klab365/psa-tool/compare/psa-tool-v1.6.6...psa-tool-v1.7.0) (2026-11-27)
+
+
+### Features
+
+* use browser PKCE flow for login ([#38](https://github.com/klab365/psa-tool/issues/38)) ([6d28ec2](https://github.com/klab365/psa-tool/commit/6d28ec2c17b83c38cf7b9e974c1310df1d0104c5))
+
 ## [1.6.6](https://github.com/klab365/psa-tool/compare/psa-tool-v1.6.5...psa-tool-v1.6.6) (2026-10-29)
 
 
