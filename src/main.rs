@@ -35,7 +35,11 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Bei Microsoft Entra ID anmelden.
-    Login,
+    Login {
+        /// Device-Code-Flow statt Browser-Login verwenden.
+        #[arg(long)]
+        device_code: bool,
+    },
     /// Die gespeicherte Anmeldung verwerfen.
     Logout,
     /// Konfiguration anzeigen und ändern.
@@ -248,7 +252,9 @@ async fn run(cli: Cli) -> Result<(), String> {
             command: Config::Set { key, value },
         } => println!("{}", mediator.send(SetConfig { key, value }).await?),
         Command::Logout => println!("{}", mediator.send(Logout).await?),
-        Command::Login => println!("{}", mediator.send(Login).await?),
+        Command::Login { device_code } => {
+            println!("{}", mediator.send(Login { device_code }).await?)
+        }
         Command::List => {
             let entries = mediator
                 .send(ListTimeEntries {

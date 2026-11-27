@@ -1,8 +1,15 @@
 use crate::paths::AppPaths;
 use chrono::Utc;
+use oauth2::PkceCodeChallenge;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{fs, io};
+use std::{
+    fs,
+    io::{self, Read, Write},
+    net::TcpListener,
+    process::Command,
+    time::{Duration, SystemTime},
+};
 
 /// Cache format version. Bumped when the stored shape changes incompatibly.
 const CACHE_VERSION: u8 = 1;
@@ -23,6 +30,8 @@ pub enum AuthError {
     Io(#[from] io::Error),
     #[error("OAuth-Fehler: {0}")]
     OAuth(String),
+    #[error("Browser-Anmeldung fehlgeschlagen: {0}")]
+    BrowserFlow(String),
     #[error("Anmeldung konnte nicht erneuert werden – bitte erneut 'psa login' ausführen ({0})")]
     RefreshFailed(String),
     #[error("Nicht angemeldet; zuerst 'psa login' ausführen")]
@@ -146,6 +155,7 @@ pub async fn access_token(
     paths: &AppPaths,
     config: &Value,
     force: bool,
+    device_code: bool,
 ) -> Result<String, AuthError> {
     let http = reqwest::Client::new();
     let a = authority(config);
@@ -187,10 +197,85 @@ pub async fn access_token(
         return Ok(access_token);
     }
 
+    let response = if device_code {
+        device_code_flow(&http, &a, client(config), &scope).await?
+    } else {
+        browser_flow(&http, &a, client(config), &scope).await?
+    };
+    let cache = build_cache(&response, "", Utc::now().timestamp());
+    if cache.refresh_token.is_empty() {
+        return Err(AuthError::OAuth("kein refresh_token erhalten".into()));
+    }
+    let access_token = cache
+        .access_token
+        .clone()
+        .ok_or_else(|| AuthError::OAuth("kein access_token erhalten".into()))?;
+    save(paths, &cache)?;
+    Ok(access_token)
+}
+
+/// Starts the default Authorization Code Flow + PKCE in the system browser.
+async fn browser_flow(
+    http: &reqwest::Client,
+    authority: &str,
+    client_id: &str,
+    scope: &str,
+) -> Result<Value, AuthError> {
+    let listener = TcpListener::bind("127.0.0.1:0").map_err(|error| {
+        AuthError::BrowserFlow(format!("lokaler Port nicht verfügbar: {error}"))
+    })?;
+    listener
+        .set_nonblocking(true)
+        .map_err(|error| AuthError::BrowserFlow(error.to_string()))?;
+    let port = listener
+        .local_addr()
+        .map_err(|error| AuthError::BrowserFlow(error.to_string()))?
+        .port();
+    let redirect_uri = format!("http://localhost:{port}");
+    let (challenge, verifier) = PkceCodeChallenge::new_random_sha256();
+    let auth_url = format!(
+        "{authority}/oauth2/v2.0/authorize?client_id={}&response_type=code&redirect_uri={}&response_mode=query&scope={}&code_challenge={}&code_challenge_method=S256",
+        urlencode(client_id),
+        urlencode(&redirect_uri),
+        urlencode(scope),
+        challenge.as_str(),
+    );
+
+    eprintln!("\nBrowser für die Anmeldung wird geöffnet …");
+    open_browser(&auth_url).map_err(|error| {
+        AuthError::BrowserFlow(format!("Browser konnte nicht geöffnet werden: {error}"))
+    })?;
+
+    let code =
+        tokio::task::spawn_blocking(move || wait_for_code(listener, Duration::from_secs(300)))
+            .await
+            .map_err(|error| AuthError::BrowserFlow(error.to_string()))??;
+
+    token_request(
+        http,
+        format!("{authority}/oauth2/v2.0/token"),
+        &[
+            ("client_id", client_id),
+            ("grant_type", "authorization_code"),
+            ("code", &code),
+            ("redirect_uri", &redirect_uri),
+            ("code_verifier", verifier.secret()),
+            ("scope", scope),
+        ],
+    )
+    .await
+}
+
+async fn device_code_flow(
+    http: &reqwest::Client,
+    authority: &str,
+    client_id: &str,
+    scope: &str,
+) -> Result<Value, AuthError> {
     let device = token_request(
-        &http,
-        format!("{a}/oauth2/v2.0/devicecode"),
-        &[("client_id", client(config)), ("scope", &scope)],
+        http,
+        format!("{authority}/oauth2/v2.0/devicecode"),
+        &[("client_id", client_id), ("scope", scope)],
     )
     .await?;
     println!(
@@ -205,36 +290,154 @@ pub async fn access_token(
         .to_owned();
     let interval = device["interval"].as_u64().unwrap_or(5);
     loop {
-        tokio::time::sleep(std::time::Duration::from_secs(interval)).await;
-        let response = token_request(
-            &http,
-            format!("{a}/oauth2/v2.0/token"),
+        tokio::time::sleep(Duration::from_secs(interval)).await;
+        match token_request(
+            http,
+            format!("{authority}/oauth2/v2.0/token"),
             &[
-                ("client_id", client(config)),
+                ("client_id", client_id),
                 ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
                 ("device_code", &code),
             ],
         )
-        .await;
-        match response {
-            Ok(response) => {
-                let cache = build_cache(&response, "", Utc::now().timestamp());
-                if cache.refresh_token.is_empty() {
-                    return Err(AuthError::OAuth("kein refresh_token erhalten".into()));
-                }
-                let access_token = cache
-                    .access_token
-                    .clone()
-                    .ok_or_else(|| AuthError::OAuth("kein access_token erhalten".into()))?;
-                save(paths, &cache)?;
-                return Ok(access_token);
-            }
+        .await
+        {
+            Ok(response) => return Ok(response),
             Err(AuthError::OAuth(error))
                 if error.contains("authorization_pending") || error.contains("slow_down") =>
             {
                 continue;
             }
             Err(error) => return Err(error),
+        }
+    }
+}
+
+fn urlencode(value: &str) -> String {
+    let mut encoded = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(byte as char);
+            }
+            _ => encoded.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    encoded
+}
+
+fn urldecode(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'%' if index + 2 < bytes.len() => {
+                let high = (bytes[index + 1] as char).to_digit(16);
+                let low = (bytes[index + 2] as char).to_digit(16);
+                if let (Some(high), Some(low)) = (high, low) {
+                    decoded.push((high * 16 + low) as u8);
+                    index += 3;
+                    continue;
+                }
+                decoded.push(b'%');
+                index += 1;
+            }
+            b'+' => {
+                decoded.push(b' ');
+                index += 1;
+            }
+            byte => {
+                decoded.push(byte);
+                index += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&decoded).into_owned()
+}
+
+/// Opens the authorization URL with `$BROWSER` or the platform browser launcher.
+fn open_browser(url: &str) -> io::Result<()> {
+    if let Ok(browser) = std::env::var("BROWSER") {
+        let mut parts = browser.split_whitespace();
+        if let Some(program) = parts.next() {
+            let mut command = Command::new(program);
+            command.args(parts).arg(url);
+            if command.spawn().is_ok() {
+                return Ok(());
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    let candidates: &[&str] = &["open"];
+    #[cfg(not(target_os = "macos"))]
+    let candidates: &[&str] = &["xdg-open", "open"];
+
+    for program in candidates {
+        if Command::new(program).arg(url).spawn().is_ok() {
+            return Ok(());
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::NotFound,
+        "kein Browser-Launcher gefunden (BROWSER setzen)",
+    ))
+}
+
+fn wait_for_code(listener: TcpListener, timeout: Duration) -> Result<String, AuthError> {
+    let deadline = SystemTime::now() + timeout;
+    let mut buffer = [0u8; 4096];
+    loop {
+        if SystemTime::now() > deadline {
+            return Err(AuthError::BrowserFlow(
+                "Zeitüberschreitung beim Warten auf die Browser-Antwort".into(),
+            ));
+        }
+        match listener.accept() {
+            Ok((mut stream, _)) => {
+                let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+                let count = stream.read(&mut buffer).unwrap_or(0);
+                let request = String::from_utf8_lossy(&buffer[..count]);
+                let target = request
+                    .lines()
+                    .next()
+                    .unwrap_or("")
+                    .split_whitespace()
+                    .nth(1)
+                    .unwrap_or("");
+                let query = target.split_once('?').map(|(_, query)| query).unwrap_or("");
+                let mut code = None;
+                let mut error = None;
+                for pair in query.split('&') {
+                    let mut parts = pair.splitn(2, '=');
+                    match (parts.next(), parts.next()) {
+                        (Some("code"), Some(value)) => code = Some(urldecode(value)),
+                        (Some("error"), Some(value)) => error = Some(urldecode(value)),
+                        _ => {}
+                    }
+                }
+
+                let body = "<html><body><h3>Anmeldung abgeschlossen. Du kannst dieses Fenster schließen.</h3></body></html>";
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.flush();
+
+                if let Some(error) = error {
+                    return Err(AuthError::OAuth(error));
+                }
+                if let Some(code) = code {
+                    return Ok(code);
+                }
+            }
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(error) => return Err(AuthError::BrowserFlow(error.to_string())),
         }
     }
 }
@@ -247,7 +450,7 @@ pub async fn get_access_token_silent(
     paths: &AppPaths,
     config: &Value,
 ) -> Result<String, AuthError> {
-    access_token(paths, config, false).await
+    access_token(paths, config, false, false).await
 }
 
 pub fn logout(paths: &AppPaths) -> io::Result<()> {

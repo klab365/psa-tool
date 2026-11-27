@@ -19,7 +19,12 @@ pub struct Client {
     token: String,
 }
 impl Client {
-    pub async fn new(paths: &AppPaths, c: &Value, force: bool) -> Result<Self, DataverseError> {
+    pub async fn new(
+        paths: &AppPaths,
+        c: &Value,
+        force: bool,
+        device_code: bool,
+    ) -> Result<Self, DataverseError> {
         let env = c["environmentUrl"]
             .as_str()
             .unwrap_or("")
@@ -31,7 +36,7 @@ impl Client {
             http: reqwest::Client::new(),
             base: format!("{env}/api/data/v9.2"),
             token: if force {
-                auth::access_token(paths, c, true).await?
+                auth::access_token(paths, c, true, device_code).await?
             } else {
                 auth::get_access_token_silent(paths, c).await?
             },

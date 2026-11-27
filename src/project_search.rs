@@ -36,7 +36,7 @@ fn escape(value: &str) -> String {
 }
 
 async fn client(paths: &AppPaths, config: &Value) -> Result<Client, String> {
-    Client::new(paths, config, false)
+    Client::new(paths, config, false, false)
         .await
         .map_err(|error| error.to_string())
 }
