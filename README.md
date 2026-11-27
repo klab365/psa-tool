@@ -41,11 +41,14 @@ psa add
 psa edit 3 # Eintrag interaktiv bearbeiten
 psa history # letzten Eintrag als Vorlage wählen
 psa week
+psa week --calendar # Tages-Spalten mit gestapelten Einträgen
 psa sync --dry-run
 ```
 
 `psa list` und `psa week` geben eine Tabelle aus, die sich an die Breite des
-Terminals anpasst und die neuesten Einträge zuerst zeigt. Datumsargumente wie
+Terminals anpasst und die neuesten Einträge zuerst zeigt. `psa week --calendar`
+zeigt stattdessen eine Wochenübersicht mit gestapelten Tages-Spalten und
+Tagessummen. Datumsargumente wie
 bei `psa add --date`, `psa week` oder `psa pull` akzeptieren neben
 `YYYY-MM-DD` auch Kurzformen wie `01.09.`, `gestern`, `Montag` oder `+2`.
 

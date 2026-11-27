@@ -1,3 +1,4 @@
+use chrono::{Datelike, Duration, NaiveDate};
 use clap::{Parser, Subcommand};
 use comfy_table::{ColumnConstraint, ContentArrangement, Table, presets::UTF8_FULL};
 use psa_tool::{
@@ -92,8 +93,11 @@ enum Command {
         /// Beliebiger Tag der Woche (Standard: heute).
         date: Option<String>,
         /// Übersicht als JSON ausgeben.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "calendar")]
         json: bool,
+        /// Einträge als Kalender mit gestapelten Tages-Spalten anzeigen.
+        #[arg(long, conflicts_with = "json")]
+        calendar: bool,
     },
     /// Alle lokalen Einträge tabellarisch anzeigen.
     List,
@@ -230,6 +234,89 @@ fn entries_table(entries: &[TimeEntry]) -> Table {
     table
 }
 
+fn format_hours(hours: f64) -> String {
+    if hours == 0.0 {
+        "0".to_owned()
+    } else {
+        hours.to_string()
+    }
+}
+
+fn weekday_short(date: NaiveDate) -> &'static str {
+    match date.weekday() {
+        chrono::Weekday::Mon => "Mo",
+        chrono::Weekday::Tue => "Di",
+        chrono::Weekday::Wed => "Mi",
+        chrono::Weekday::Thu => "Do",
+        chrono::Weekday::Fri => "Fr",
+        chrono::Weekday::Sat => "Sa",
+        chrono::Weekday::Sun => "So",
+    }
+}
+
+fn calendar_cell(date: NaiveDate, entries: &[TimeEntry]) -> String {
+    let date_string = date.to_string();
+    let day_entries: Vec<_> = entries
+        .iter()
+        .filter(|entry| entry.work_date == date_string)
+        .collect();
+    let mut lines = vec![format!("{} {}", weekday_short(date), date.format("%d.%m."))];
+
+    if day_entries.is_empty() {
+        lines.push("Keine Einträge".to_owned());
+    } else {
+        for entry in &day_entries {
+            lines.push(format!("#{} · {}h", entry.id, format_hours(entry.hours)));
+            let project = entry
+                .project_name
+                .as_deref()
+                .filter(|name| !name.is_empty())
+                .unwrap_or("Ohne Projekt");
+            let detail = entry
+                .task_name
+                .as_deref()
+                .filter(|name| !name.is_empty())
+                .or_else(|| entry.description.as_deref().filter(|text| !text.is_empty()));
+            lines.push(match detail {
+                Some(detail) => format!("{project} / {detail}"),
+                None => project.to_owned(),
+            });
+        }
+    }
+
+    let day_total: f64 = day_entries.iter().map(|entry| entry.hours).sum();
+    lines.push(format!("Tagessumme: {}h", format_hours(day_total)));
+    lines.join("\n")
+}
+
+fn calendar_table(entries: &[TimeEntry], from: &str) -> Result<Table, String> {
+    let start = NaiveDate::parse_from_str(from, "%Y-%m-%d")
+        .map_err(|error| format!("Ungültiges Wochenstartdatum {from}: {error}"))?;
+    let terminal_width = crossterm::terminal::size()
+        .map(|(width, _)| usize::from(width))
+        .unwrap_or(80);
+    let columns = (terminal_width.saturating_sub(1) / 28).clamp(1, 7);
+
+    let days: Vec<_> = (0..7)
+        .map(|offset| start + Duration::days(offset))
+        .collect();
+    let mut table = Table::new();
+    table
+        .load_preset(UTF8_FULL)
+        .set_content_arrangement(ContentArrangement::Dynamic);
+
+    for week_row in days.chunks(columns) {
+        let mut cells: Vec<String> = week_row
+            .iter()
+            .map(|date| calendar_cell(*date, entries))
+            .collect();
+        cells.resize(columns, String::new());
+        table.add_row(cells);
+    }
+
+    Ok(table)
+}
+
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
@@ -285,7 +372,11 @@ async fn run(cli: Cli) -> Result<(), String> {
             let id = mediator.send(CreateTimeEntry { entry }).await?;
             println!("Eintrag #{id} aus Verlauf erfasst.")
         }
-        Command::Week { date, json } => {
+        Command::Week {
+            date,
+            json,
+            calendar,
+        } => {
             let (from, to) = dates::week(date.as_deref())?;
             let entries = mediator
                 .send(ListTimeEntries {
@@ -319,6 +410,10 @@ async fn run(cli: Cli) -> Result<(), String> {
                     "{}",
                     serde_json::to_string_pretty(&output).map_err(|error| error.to_string())?
                 );
+            } else if calendar {
+                println!("Woche {from} – {to}");
+                println!("{}", calendar_table(&entries, &from)?);
+                println!("Summe: {}h", format_hours(total));
             } else {
                 println!("Woche {from} – {to}");
                 if entries.is_empty() {
