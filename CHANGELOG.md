@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.8.0](https://github.com/klab365/psa-tool/compare/psa-tool-v1.7.0...psa-tool-v1.8.0) (2026-11-28)
+
+
+### Features
+
+* add JSON and calendar views for weekly entries ([#40](https://github.com/klab365/psa-tool/issues/40)) ([9a5eef3](https://github.com/klab365/psa-tool/commit/9a5eef3a235ab8c40e0f52495fef82f9f29653c7))
+* allow choosing browser for login ([#43](https://github.com/klab365/psa-tool/issues/43)) ([2cbe0d7](https://github.com/klab365/psa-tool/commit/2cbe0d72fc6f94e3ca49d60fb19688387ee0c97a))
+
+
+### Bug Fixes
+
+* update rustls to patched version ([#42](https://github.com/klab365/psa-tool/issues/42)) ([6955b06](https://github.com/klab365/psa-tool/commit/6955b064dca2d041b840f67b4a2a26df1b9a4908))
+
 ## [1.7.0](https://github.com/klab365/psa-tool/compare/psa-tool-v1.6.6...psa-tool-v1.7.0) (2026-11-27)
 
 
