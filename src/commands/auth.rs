@@ -7,6 +7,7 @@ use medi_rs::{MediCommand, medi_handler, medi_module};
 #[medi_command(return_type = String, error_type = String)]
 pub struct Login {
     pub device_code: bool,
+    pub web: Option<String>,
 }
 
 #[derive(MediCommand)]
@@ -15,9 +16,15 @@ pub struct Logout;
 
 #[medi_handler]
 async fn login(context: AppContext, command: Login) -> Result<String, String> {
-    let client = Client::new(&context.paths, &context.config, true, command.device_code)
-        .await
-        .map_err(|error| error.to_string())?;
+    let client = Client::new_with_browser(
+        &context.paths,
+        &context.config,
+        true,
+        command.device_code,
+        command.web.as_deref(),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
     let who = client
         .get("/WhoAmI", false)
         .await

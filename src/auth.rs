@@ -156,6 +156,7 @@ pub async fn access_token(
     config: &Value,
     force: bool,
     device_code: bool,
+    browser: Option<&str>,
 ) -> Result<String, AuthError> {
     let http = reqwest::Client::new();
     let a = authority(config);
@@ -200,7 +201,7 @@ pub async fn access_token(
     let response = if device_code {
         device_code_flow(&http, &a, client(config), &scope).await?
     } else {
-        browser_flow(&http, &a, client(config), &scope).await?
+        browser_flow(&http, &a, client(config), &scope, browser).await?
     };
     let cache = build_cache(&response, "", Utc::now().timestamp());
     if cache.refresh_token.is_empty() {
@@ -220,6 +221,7 @@ async fn browser_flow(
     authority: &str,
     client_id: &str,
     scope: &str,
+    browser: Option<&str>,
 ) -> Result<Value, AuthError> {
     let listener = TcpListener::bind("127.0.0.1:0").map_err(|error| {
         AuthError::BrowserFlow(format!("lokaler Port nicht verfügbar: {error}"))
@@ -242,7 +244,7 @@ async fn browser_flow(
     );
 
     eprintln!("\nBrowser für die Anmeldung wird geöffnet …");
-    open_browser(&auth_url).map_err(|error| {
+    open_browser(&auth_url, browser).map_err(|error| {
         AuthError::BrowserFlow(format!("Browser konnte nicht geöffnet werden: {error}"))
     })?;
 
@@ -357,7 +359,45 @@ fn urldecode(value: &str) -> String {
 }
 
 /// Opens the authorization URL with `$BROWSER` or the platform browser launcher.
-fn open_browser(url: &str) -> io::Result<()> {
+fn open_browser(url: &str, browser: Option<&str>) -> io::Result<()> {
+    if let Some(browser) = browser {
+        #[cfg(target_os = "macos")]
+        let result = {
+            let app = match browser {
+                "edge" => "Microsoft Edge",
+                "chrome" => "Google Chrome",
+                "firefox" => "Firefox",
+                "safari" => "Safari",
+                _ => unreachable!("browser is restricted by clap"),
+            };
+            Command::new("open").args(["-a", app, url]).spawn()
+        };
+        #[cfg(target_os = "windows")]
+        let result = {
+            let executable = match browser {
+                "edge" => "msedge",
+                "chrome" => "chrome",
+                "firefox" => "firefox",
+                "safari" => "safari",
+                _ => unreachable!("browser is restricted by clap"),
+            };
+            Command::new("cmd")
+                .args(["/C", "start", "", executable, url])
+                .spawn()
+        };
+        #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+        let result = {
+            let executable = match browser {
+                "edge" => "microsoft-edge",
+                "chrome" => "google-chrome",
+                "firefox" => "firefox",
+                "safari" => "safari",
+                _ => unreachable!("browser is restricted by clap"),
+            };
+            Command::new(executable).arg(url).spawn()
+        };
+        return result.map(|_| ());
+    }
     if let Ok(browser) = std::env::var("BROWSER") {
         let mut parts = browser.split_whitespace();
         if let Some(program) = parts.next() {
@@ -450,7 +490,7 @@ pub async fn get_access_token_silent(
     paths: &AppPaths,
     config: &Value,
 ) -> Result<String, AuthError> {
-    access_token(paths, config, false, false).await
+    access_token(paths, config, false, false, None).await
 }
 
 pub fn logout(paths: &AppPaths) -> io::Result<()> {
