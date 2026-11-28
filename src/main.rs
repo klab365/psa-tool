@@ -40,6 +40,13 @@ enum Command {
         /// Device-Code-Flow statt Browser-Login verwenden.
         #[arg(long)]
         device_code: bool,
+        /// Browser für den Login öffnen (z. B. edge; Standard: System-Browser).
+        #[arg(
+            long,
+            value_parser = ["edge", "chrome", "firefox", "safari"],
+            conflicts_with = "device_code"
+        )]
+        web: Option<String>,
     },
     /// Die gespeicherte Anmeldung verwerfen.
     Logout,
@@ -342,8 +349,8 @@ async fn run(cli: Cli) -> Result<(), String> {
             command: Config::Set { key, value },
         } => println!("{}", mediator.send(SetConfig { key, value }).await?),
         Command::Logout => println!("{}", mediator.send(Logout).await?),
-        Command::Login { device_code } => {
-            println!("{}", mediator.send(Login { device_code }).await?)
+        Command::Login { device_code, web } => {
+            println!("{}", mediator.send(Login { device_code, web }).await?)
         }
         Command::List => {
             let entries = mediator

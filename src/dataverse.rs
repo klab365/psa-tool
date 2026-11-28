@@ -25,6 +25,16 @@ impl Client {
         force: bool,
         device_code: bool,
     ) -> Result<Self, DataverseError> {
+        Self::new_with_browser(paths, c, force, device_code, None).await
+    }
+
+    pub async fn new_with_browser(
+        paths: &AppPaths,
+        c: &Value,
+        force: bool,
+        device_code: bool,
+        browser: Option<&str>,
+    ) -> Result<Self, DataverseError> {
         let env = c["environmentUrl"]
             .as_str()
             .unwrap_or("")
@@ -36,7 +46,7 @@ impl Client {
             http: reqwest::Client::new(),
             base: format!("{env}/api/data/v9.2"),
             token: if force {
-                auth::access_token(paths, c, true, device_code).await?
+                auth::access_token(paths, c, true, device_code, browser).await?
             } else {
                 auth::get_access_token_silent(paths, c).await?
             },
