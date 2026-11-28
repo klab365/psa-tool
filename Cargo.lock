@@ -1263,6 +1263,7 @@ dependencies = [
  "chrono-tz",
  "clap",
  "comfy-table",
+ "crossterm 0.29.0",
  "directories",
  "inquire",
  "medi-rs",
